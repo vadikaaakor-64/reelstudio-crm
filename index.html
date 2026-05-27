@@ -300,6 +300,11 @@ textarea.form-input{resize:vertical;min-height:56px}
 </div>
 
 <!-- APP -->
+<div id="db-loading" style="position:fixed;inset:0;background:rgba(255,255,255,.95);display:none;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px">
+  <div style="width:40px;height:40px;border:3px solid #e5e7eb;border-top-color:#4F46E5;border-radius:50%;animation:spin 1s linear infinite"></div>
+  <div style="font-size:13px;color:#6b7280;font-weight:500">Загружаем данные...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 <div id="app">
   <div class="sidebar" id="sidebar">
     <div class="sb-top">
@@ -523,6 +528,251 @@ textarea.form-input{resize:vertical;min-height:56px}
 </div>
 
 <script>
+// ═══ SUPABASE CONFIG ═══
+const SUPA_URL = 'https://rqmxfsmnykvkcoewbltw.supabase.co';
+const SUPA_KEY = 'sb_publishable_CPCD7nY70_9FDJDy6l9bwg_vWaKv8md';
+
+// Lightweight Supabase REST client
+const db = {
+  async select(table, query='') {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`, {
+      headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY}
+    });
+    return r.ok ? r.json() : [];
+  },
+  async insert(table, data) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
+      method:'POST',
+      headers: {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body: JSON.stringify(data)
+    });
+    return r.ok ? r.json() : null;
+  },
+  async upsert(table, data, onConflict='id') {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
+      method:'POST',
+      headers: {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation,resolution=merge-duplicates'},
+      body: JSON.stringify(data)
+    });
+    return r.ok ? r.json() : null;
+  },
+  async update(table, data, filter) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${filter}`, {
+      method:'PATCH',
+      headers: {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body: JSON.stringify(data)
+    });
+    return r.ok ? r.json() : null;
+  },
+  async delete(table, filter) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${filter}`, {
+      method:'DELETE',
+      headers: {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    });
+    return r.ok;
+  }
+};
+
+// ── DB SYNC FUNCTIONS ──────────────────────────────────────────────────────
+
+async function dbSaveCard(c) {
+  await db.upsert('cards', {
+    id: c.id, title: c.title, client: c.client, col: c.col,
+    assign: c.assign, prio: c.prio, price: c.price,
+    earn_added: c.earnAdded, rating: c.rating,
+    log: c.log, chat: c.chat, checklist: c.checklist||[]
+  }, 'id');
+}
+
+async function dbLoadCards() {
+  const rows = await db.select('cards','order=id.asc');
+  if(!rows||!rows.length) return;
+  cards = rows.map(r=>({
+    id:r.id, title:r.title, client:r.client, col:r.col,
+    assign:r.assign, prio:r.prio, price:r.price,
+    earnAdded:r.earn_added, rating:r.rating,
+    log:r.log||[], chat:r.chat||[], checklist:r.checklist||[]
+  }));
+  nextId = Math.max(...cards.map(c=>c.id))+1;
+}
+
+async function dbSaveEarning(e) {
+  await db.upsert('earnings', {
+    id: e.dbId||undefined, num:e.num, title:e.title,
+    date:e.date, sum:e.sum, card_id:e.cardId, assign:e.assign
+  }, 'id');
+}
+
+async function dbLoadEarnings() {
+  const rows = await db.select('earnings','order=num.asc');
+  if(!rows) return;
+  earnings = rows.map(r=>({
+    num:r.num, title:r.title, date:r.date, sum:r.sum,
+    cardId:r.card_id, assign:r.assign, dbId:r.id
+  }));
+  if(earnings.length) nextEarn = Math.max(...earnings.map(e=>e.num))+1;
+}
+
+async function dbClearEarnings(assign) {
+  if(assign) await db.delete('earnings','assign=eq.'+assign);
+  else await db.delete('earnings','id=gte.0');
+}
+
+async function dbSaveClient(c) {
+  await db.upsert('clients', {
+    id:c.id, name:c.name, montager:c.montager, assign:c.assign,
+    status:c.status, total_paid:c.totalPaid, total_reels:c.totalReels,
+    used_reels:c.usedReels, payments:c.payments, balance:c.balance||0,
+    is_legacy:c.isLegacy||false
+  }, 'id');
+}
+
+async function dbLoadClients() {
+  const rows = await db.select('clients','order=created_at.asc');
+  if(!rows||!rows.length) return;
+  clientsData = rows.map(r=>({
+    id:r.id, name:r.name, montager:r.montager||'—', assign:r.assign||'',
+    status:r.status, totalPaid:r.total_paid, totalReels:r.total_reels,
+    usedReels:r.used_reels, payments:r.payments||[], balance:r.balance||0,
+    isLegacy:r.is_legacy||false
+  }));
+}
+
+async function dbSaveSalesClient(c) {
+  await db.upsert('sales_clients', {
+    id:c.id, name:c.name, seller:c.seller, date:c.date,
+    amount:c.amount, reels:c.reels, referral:c.referral,
+    split_payment:c.splitPayment, paid1:c.paid1, paid2:c.paid2,
+    commission:c.commission
+  }, 'id');
+}
+
+async function dbLoadSalesClients() {
+  const rows = await db.select('sales_clients','order=created_at.asc');
+  if(!rows||!rows.length) return;
+  salesClients = rows.map(r=>({
+    id:r.id, name:r.name, seller:r.seller, date:r.date,
+    amount:r.amount, reels:r.reels, referral:r.referral,
+    splitPayment:r.split_payment, paid1:r.paid1, paid2:r.paid2,
+    commission:r.commission
+  }));
+}
+
+async function dbSaveNotification(n) {
+  await db.insert('notifications', {
+    type:n.type, status:n.status, is_read:n.read,
+    card_id:n.cardId, new_price:n.newPrice,
+    title:n.title, body:n.body, time:n.time
+  });
+}
+
+async function dbLoadNotifications() {
+  const rows = await db.select('notifications','order=created_at.desc&limit=50');
+  if(!rows) return;
+  notifications = rows.map(r=>({
+    id:r.id, type:r.type, status:r.status, read:r.is_read,
+    cardId:r.card_id, newPrice:r.new_price,
+    title:r.title, body:r.body, time:r.time
+  }));
+}
+
+async function dbUpdateNotifStatus(id, status) {
+  await db.update('notifications',{status,is_read:true},'id=eq.'+id);
+}
+
+async function dbSavePayoutAccum() {
+  const rows = Object.entries(payoutAccum).map(([assign,amount])=>({'assign':assign,'amount':amount}));
+  for(const r of rows) await db.upsert('payout_accum', r, 'assign');
+}
+
+async function dbLoadPayoutAccum() {
+  const rows = await db.select('payout_accum','');
+  if(!rows) return;
+  rows.forEach(r=>{ payoutAccum[r.assign]=r.amount; });
+}
+
+async function dbSavePayoutHistory(p) {
+  await db.insert('payout_history',{
+    date:p.date, month:p.month, total:p.total,
+    montagers:p.montagers||0, sales:p.sales||0, rop:p.rop||0
+  });
+}
+
+async function dbLoadPayoutHistory() {
+  const rows = await db.select('payout_history','order=created_at.asc');
+  if(!rows) return;
+  payoutHistory = rows.map(r=>({
+    date:r.date, month:r.month, total:r.total,
+    montagers:r.montagers, sales:r.sales, rop:r.rop
+  }));
+}
+
+async function dbSaveUsers() {
+  for(const u of registeredUsers) {
+    await db.upsert('users',{
+      id:u.id, name:u.name, email:u.email||'', role:u.role,
+      password:u.password||'1234', av:u.av, added:u.added
+    },'id');
+  }
+}
+
+async function dbLoadUsers() {
+  const rows = await db.select('users','order=added.asc');
+  if(!rows||!rows.length) return;
+  registeredUsers = rows.map(r=>({
+    id:r.id, name:r.name, email:r.email, role:r.role,
+    password:r.password, av:r.av, added:r.added
+  }));
+}
+
+async function dbSaveExpense(e) {
+  await db.insert('manual_expenses',{
+    date:e.date, category:e.category, description:e.desc, amount:e.amount
+  });
+}
+
+async function dbLoadExpenses() {
+  const rows = await db.select('manual_expenses','order=created_at.asc');
+  if(!rows) return;
+  manualExpenses = rows.map(r=>({
+    id:r.id, date:r.date, category:r.category, desc:r.description, amount:r.amount
+  }));
+  if(manualExpenses.length) nextExpId = Math.max(...manualExpenses.map(e=>e.id))+1;
+}
+
+async function dbSaveSalesSettled() {
+  for(const [sid,amt] of Object.entries(salesSettled)) {
+    await db.upsert('sales_settled',{seller_id:sid,amount:amt},'seller_id');
+  }
+}
+
+async function dbLoadSalesSettled() {
+  const rows = await db.select('sales_settled','');
+  if(!rows) return;
+  rows.forEach(r=>{ salesSettled[r.seller_id]=r.amount; });
+}
+
+// ── INITIAL DATA LOAD ─────────────────────────────────────────────────────
+let dbReady = false;
+async function initDB() {
+  const loadingEl = document.getElementById('db-loading');
+  if(loadingEl) loadingEl.style.display='flex';
+  try {
+    await Promise.all([
+      dbLoadCards(), dbLoadEarnings(), dbLoadClients(),
+      dbLoadSalesClients(), dbLoadNotifications(),
+      dbLoadPayoutAccum(), dbLoadPayoutHistory(),
+      dbLoadUsers(), dbLoadExpenses(), dbLoadSalesSettled()
+    ]);
+    dbReady = true;
+    console.log('✅ DB loaded');
+  } catch(e) {
+    console.warn('DB load failed, using local data:', e);
+    dbReady = false;
+  }
+  if(loadingEl) loadingEl.style.display='none';
+}
+
 // ═══ DATA ═══
 const COLS = [
   {id:'queue', label:'На монтаж',      dot:'#9ca3af', warnH:24},
@@ -1249,6 +1499,7 @@ function handlePrice(nid, accept){
       }
       refreshOwnerPending();
       updateEarnTable();
+      if(dbReady){dbSaveCard(c);dbSavePayoutAccum();}
     }
     toast('✅ Изменение цены принято');
   } else {
@@ -1302,6 +1553,7 @@ function confirmAccept(){
   const card=cards.find(x=>x.id===savedId); if(!card)return;
   const last=card.log[card.log.length-1]; if(last&&!last.out) last.out=Date.now();
   card.log.push({col:'client',in:Date.now(),out:null}); card.col='client';
+  if(dbReady) dbSaveCard(card);
   renderManagerBoard();
   toast('⭐ Ролик принят с оценкой '+selectedRating+'/5 → У заказчика');
 }
@@ -1380,6 +1632,7 @@ function saveCheckItem(){
   inp.value='';
   document.getElementById('add-check-row').style.display='none';
   renderChecklist(c);
+  if(dbReady) dbSaveCard(c);
   // Notify in chat
   const d=new Date(),time=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
   c.chat.push({who:'manager',name:'Анна Н.',text:'📋 Добавлена правка: '+text,time,read:false});
@@ -1390,6 +1643,7 @@ function toggleCheck(cardId,idx,val){
   if(!c||!c.checklist||!c.checklist[idx])return;
   c.checklist[idx].done=val;
   renderChecklist(c);
+  if(dbReady) dbSaveCard(c);
   // If all done, notify manager (when montager checks)
   if(currentRole==='montage'&&c.checklist.every(i=>i.done)){
     notifications.push({id:notifId++,type:'checklist_done',status:'new',read:false,cardId:c.id,
@@ -1426,21 +1680,28 @@ function moveCard(id,to){
   if(to==='agree'&&!c.earnAdded){
     c.earnAdded=true;
     const d=new Date(), ds=d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
-    earnings.push({num:nextEarn++,title:c.title,date:ds,sum:c.price,cardId:c.id});
+    const newEarn={num:nextEarn++,title:c.title,date:ds,sum:c.price,cardId:c.id,assign:c.assign};
+    earnings.push(newEarn);
+    if(dbReady) dbSaveEarning(newEarn);
     // Add to payout accumulator immediately — owner/admin sees it right away
     if(payoutAccum[c.assign]!==undefined) payoutAccum[c.assign]+=c.price;
     refreshOwnerPending();
+    if(dbReady) dbSavePayoutAccum();
     updateEarnTable(); toast('💰 Добавлено в выплаты — ₽'+c.price);
     // Notify manager
-    notifications.push({id:notifId++,type:'to_agree',status:'new',read:false,cardId:c.id,
+    const newNotif={id:notifId++,type:'to_agree',status:'new',read:false,cardId:c.id,
       title:'Ролик на согласование: '+c.title,
       body:'Монтажёр отправил ролик на проверку. Проверьте и примите или отправьте на правки.',
-      time:new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})});
+      time:new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'})};
+    notifications.push(newNotif);
+    if(dbReady) dbSaveNotification(newNotif);
     updateNotifBadge();
   }
   closeCard();
   if(currentRole==='montage'){renderMontageBoard();updateEarnTable();}
   else renderManagerBoard();
+  // Save to DB
+  if(dbReady) dbSaveCard(cards.find(x=>x.id===id));
 }
 function rejectCard(id){ moveCard(id,'fix'); renderManagerBoard(); toast('↩ Отправлен на правки'); }
 function reassignCard(id, newAssign){
@@ -1752,6 +2013,10 @@ function submitNewClient(){
   ['ac-name','ac-amount','ac-reels'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('ac-referral').checked=false;
   document.getElementById('ac-split').checked=false;
+  if(dbReady){
+    dbSaveSalesClient(salesClients[salesClients.length-1]);
+    dbSaveClient(clientsData[clientsData.length-1]);
+  }
   renderSalesClients(); renderSalesDash();
   renderClientsPage(); renderMgrDash();
   toast('✅ Клиент добавлен: '+name+(referral?' (реферал)':'')+(split?' · 50/50':''));
@@ -2074,6 +2339,12 @@ function confirmPayAll(){
   renderSalesDash();
   renderSalesIncome();
   refreshOwnerPending();
+  if(dbReady){
+    dbSavePayoutHistory(payoutHistory[payoutHistory.length-1]);
+    dbSavePayoutAccum();
+    dbSaveSalesSettled();
+    dbClearEarnings(); // clear all earnings after payout
+  }
   toast('✅ Зарплаты выплачены всей команде! Счётчики обнулены.');
 }
 
@@ -2131,6 +2402,7 @@ function submitRegistration(){
   registeredUsers.push({id:'u'+nextUserId++,name,email,role,av,password:pass,added:ds});
   closeRegModal();
   ['reg-name','reg-email','reg-pass'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(dbReady) dbSaveUsers();
   renderUsers();
   toast('✅ Добавлен: '+name+' — '+ROLE_LABELS[role]);
 }
@@ -2265,7 +2537,9 @@ function submitExpense(){
   const amount=parseInt(document.getElementById('exp-amount').value);
   const date=document.getElementById('exp-date').value.trim();
   if(!amount||amount<1){toast('Введите сумму');return;}
-  manualExpenses.push({id:nextExpId++,date,category:cat,desc,amount});
+  const newExp={id:nextExpId++,date,category:cat,desc,amount};
+  manualExpenses.push(newExp);
+  if(dbReady) dbSaveExpense(newExp);
   renderDDS();
   toast('✅ Расход добавлен: ₽'+amount.toLocaleString());
 }
@@ -2495,6 +2769,7 @@ function submitOldClient(){
     balance, isLegacy:true
   });
   closeOldClientModal();
+  if(dbReady) dbSaveClient(clientsData[clientsData.length-1]);
   renderClientsPage();
   renderMgrDash();
   toast('✅ Клиент добавлен: '+name+' ('+usedReels+'/'+totalReels+' роликов)');
@@ -2517,6 +2792,15 @@ function submitPayment(){
   if(activeView&&activeView.id==='v-mgdash') renderMgrDash();
   toast('✅ Оплата зафиксирована: '+c.name+' +'+reels+' роликов, ₽'+amt.toLocaleString());
 }
+</script>
+<script>
+// Start DB init immediately when page loads
+initDB().then(()=>{
+  document.getElementById('login').style.display='flex';
+}).catch(()=>{
+  document.getElementById('login').style.display='flex';
+});
+document.getElementById('login').style.display='none'; // hide until DB ready
 </script>
 </body>
 </html>
