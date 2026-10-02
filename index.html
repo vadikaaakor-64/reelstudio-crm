@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reels Studio — учёт клиентов и оплат</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0F1012;
+    --surface: #17181C;
+    --surface-2: #1E2024;
+    --line: #2A2C31;
+    --text: #F3F2ED;
+    --text-muted: #8C8E96;
+    --accent: #FF4D2E;        /* clapper red-orange — CTA, REC */
+    --accent-dim: rgba(255,77,46,.14);
+    --ok: #4ADE80;             /* остаток здоровый */
+    --ok-dim: rgba(74,222,128,.14);
+    --warn: #FBBF24;           /* остаток заканчивается */
+    --warn-dim: rgba(251,191,36,.14);
+    --danger: #FF5C6C;         /* остаток исчерпан / перерасход */
+    --danger-dim: rgba(255,92,108,.14);
+    --radius: 14px;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .app{ display:flex; height:100vh; }
+
+  /* ---------- Sidebar (desktop) ---------- */
+  .sidebar{
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    display:flex; flex-direction:column;
+    padding: 20px 12px;
+  }
+  .brand{
+    font-family: var(--font-display);
+    font-size: 26px;
+    letter-spacing: .5px;
+    padding: 6px 10px 20px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .nav-item{
+    display:flex; align-items:center; gap:10px;
+    padding: 11px 12px; border-radius: 10px;
+    color: var(--text-muted); font-weight:600; font-size:14px;
+    cursor:pointer; margin-bottom:2px; user-select:none;
+  }
+  .nav-item svg{ width:18px; height:18px; opacity:.85; }
+  .nav-item.active{ background: var(--surface-2); color: var(--text); }
+  .nav-item.active svg{ opacity:1; }
+  .nav-item:hover:not(.active){ background: rgba(255,255,255,.03); }
+  .sidebar-footer{ margin-top:auto; padding:12px 10px; font-size:12px; color:var(--text-muted); border-top:1px solid var(--line); padding-top:14px;}
+
+  /* ---------- Main column ---------- */
+  .main{ flex:1; display:flex; flex-direction:column; min-width:0; }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 18px 24px; border-bottom:1px solid var(--line);
+    background: var(--bg);
+  }
+  .topbar h1{ font-family:var(--font-display); font-size:22px; letter-spacing:.4px; font-weight:400;}
+  .topbar .sub{ font-size:12.5px; color:var(--text-muted); margin-top:2px; }
+  .fab{
+    background: var(--accent); color:#1a0a05; border:none; border-radius: 10px;
+    font-family: var(--font-body); font-weight:700; font-size:13.5px;
+    padding: 10px 16px; cursor:pointer; display:flex; align-items:center; gap:6px;
+    box-shadow: 0 4px 14px rgba(255,77,46,.28);
+  }
+  .fab:hover{ filter: brightness(1.06); }
+  .content{ flex:1; overflow-y:auto; padding: 22px 24px 90px; }
+
+  /* ---------- Film-strip decorative rule ---------- */
+  .filmrule{
+    height:10px; margin-bottom:18px;
+    background-image: radial-gradient(circle, var(--line) 1.6px, transparent 1.6px);
+    background-size: 14px 10px;
+    background-position: 0 center;
+    opacity:.7;
+  }
+
+  /* ---------- Cards / grid ---------- */
+  .grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:14px; margin-bottom:22px; }
+  .grid-3{ display:grid; grid-template-columns: repeat(3,1fr); gap:12px; margin-bottom:18px; }
+  @media (max-width:520px){ .grid-3{ grid-template-columns: 1fr; } }
+  .stat-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px 16px 14px;
+  }
+  .stat-card .label{ font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+  .stat-card .value{ font-family:var(--font-mono); font-size:26px; font-weight:700; margin-top:8px; font-variant-numeric: tabular-nums; }
+  .stat-card .delta{ font-size:12px; margin-top:6px; color: var(--ok); font-weight:600; }
+  .stat-card .delta.neg{ color:var(--accent); }
+
+  .panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px; margin-bottom:18px;
+  }
+  .panel-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .panel-head h3{ font-size:14.5px; font-weight:700; }
+  .panel-head .hint{ font-size:12px; color:var(--text-muted); }
+
+  /* chart */
+  .chart{ display:flex; align-items:flex-end; gap:10px; height:140px; padding-top:6px; }
+  .chart .col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .chart .bar-wrap{ width:100%; height:104px; display:flex; align-items:flex-end; justify-content:center; }
+  .chart .bar{ width:60%; border-radius:5px 5px 3px 3px; background: linear-gradient(180deg, var(--accent), #B8330F); min-height:4px; transition: height .5s ease; }
+  .chart .m-label{ font-size:11px; color:var(--text-muted); font-weight:600; }
+  .chart .m-value{ font-family:var(--font-mono); font-size:10.5px; color:var(--text-muted); }
+
+  /* rank / list rows shared */
+  .rank-row{ display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .rank-row:last-child{ border-bottom:none; }
+  .rank-num{ font-family:var(--font-mono); color:var(--text-muted); font-size:12px; width:16px; }
+  .avatar{
+    width:34px; height:34px; border-radius:9px; background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px;
+    flex-shrink:0; border:1px solid var(--line);
+  }
+  .rank-info{ flex:1; min-width:0; }
+  .rank-info .name{ font-size:13.5px; font-weight:600; }
+  .rank-info .meta{ font-size:11.5px; color:var(--text-muted); }
+  .rank-amount{ font-family:var(--font-mono); font-weight:700; font-size:13.5px; }
+  .bar-bg{ height:4px; border-radius:2px; background:var(--line); margin-top:6px; overflow:hidden; }
+  .bar-fg{ height:100%; background:var(--accent); border-radius:2px; }
+
+  /* balance badge — the core new concept */
+  .balance{ display:inline-flex; align-items:center; gap:6px; font-family:var(--font-mono); font-weight:700; font-size:13px; padding:5px 10px; border-radius:8px; white-space:nowrap; }
+  .balance.ok{ background:var(--ok-dim); color:var(--ok); }
+  .balance.warn{ background:var(--warn-dim); color:var(--warn); }
+  .balance.danger{ background:var(--danger-dim); color:var(--danger); }
+  .balance .n{ font-size:15px; }
+
+  /* generic table/list rows */
+  .row{
+    display:flex; align-items:center; gap:12px; padding:13px 4px;
+    border-bottom:1px solid var(--line); cursor:pointer;
+  }
+  .row:hover{ background: rgba(255,255,255,.02); }
+  .row:last-child{ border-bottom:none; }
+  .row .title{ font-size:14px; font-weight:600; }
+  .row .subtitle{ font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .row .right{ margin-left:auto; text-align:right; flex-shrink:0; }
+  .row .amount{ font-family:var(--font-mono); font-weight:700; font-size:14px; }
+
+  .search{
+    width:100%; background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; color:var(--text); font-family:var(--font-body); font-size:13.5px; margin-bottom:14px;
+  }
+  .search::placeholder{ color:var(--text-muted); }
+  .search:focus{ outline:none; border-color:var(--accent); }
+
+  .manager-select{
+    background:var(--surface-2); border:1px solid var(--line); border-radius:7px;
+    padding:4px 8px; color:var(--text-muted); font-family:var(--font-body); font-size:11px;
+    cursor:pointer; max-width:120px;
+  }
+  .manager-select:focus{ outline:none; border-color:var(--accent); color:var(--text); }
+
+  .row-no-manager{
+    background: rgba(255,77,46,.08);
+    border-left: 3px solid var(--accent);
+    padding-left: 10px;
+    margin-left: -4px;
+  }
+  .no-manager-badge{
+    display:inline-block; font-size:10px; font-weight:800; color:var(--accent);
+    background:var(--accent-dim); padding:2px 8px; border-radius:100px; margin-left:8px;
+    vertical-align:middle; letter-spacing:.2px; text-transform:uppercase;
+  }
+
+  .confirm-btn{
+    width:30px; height:30px; border-radius:50%; flex-shrink:0; cursor:pointer;
+    border:2px solid var(--line); background:transparent; color:transparent;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .confirm-btn:hover{ border-color:var(--ok); }
+  .confirm-btn.confirmed{ background:var(--ok); border-color:var(--ok); color:#052e12; }
+
+  .reel-group{
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    margin-bottom:10px; overflow:hidden;
+  }
+  .reel-group summary{
+    list-style:none; cursor:pointer; padding:12px 14px; display:flex; align-items:center;
+    justify-content:space-between; gap:10px; user-select:none;
+  }
+  .reel-group summary::-webkit-details-marker{ display:none; }
+  .reel-group summary::before{
+    content:'▸'; color:var(--text-muted); font-size:11px; margin-right:8px; transition:transform .15s;
+  }
+  .reel-group[open] summary::before{ transform:rotate(90deg); }
+  .reel-group summary .pkg-title{ font-size:13.5px; font-weight:700; }
+  .reel-group summary .pkg-meta{ font-size:11.5px; color:var(--text-muted); font-weight:600; margin-top:2px; }
+  .reel-group summary .pkg-count{ font-family:var(--font-mono); font-size:12.5px; font-weight:700; color:var(--ok); flex-shrink:0; }
+  .reel-group .reel-group-body{ border-top:1px solid var(--line); padding:2px 14px; }
+  .reel-group .row{ padding:10px 0; }
+
+  /* Таблица роликов (внутри пакета и в отчёте) */
+  .reel-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .reel-table th{
+    text-align:left; color:var(--text-muted); font-weight:700; font-size:10px;
+    text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; border-bottom:1px solid var(--line);
+  }
+  .reel-table th:last-child, .reel-table td:last-child{ text-align:right; }
+  .reel-table td{ padding:8px; border-bottom:1px solid var(--line); }
+  .reel-table tr:last-child td{ border-bottom:none; }
+  .reel-table .rt-num{ font-family:var(--font-mono); color:var(--text-muted); width:30px; }
+  .reel-table .rt-date{ color:var(--text-muted); white-space:nowrap; width:64px; }
+  .reel-table .rt-price{ font-family:var(--font-mono); font-weight:700; white-space:nowrap; }
+  .reel-tr.clickable{ cursor:pointer; }
+  .reel-tr.clickable:hover td{ background:rgba(255,255,255,.03); }
+  .reel-table-subtotal{ text-align:right; font-size:11.5px; font-weight:700; color:var(--ok); padding:8px 8px 2px; }
+  .referral-row td{ background:rgba(74,222,128,.08); }
+  .referral-row .rt-price{ color:var(--ok); font-weight:800; }
+
+  /* Увеличенное окно отчёта */
+  .sheet.sheet-report{ max-width:640px; }
+  .report-section{ margin-bottom:18px; }
+  .report-section-title{ font-size:13px; font-weight:700; margin-bottom:8px; }
+  @media (min-width:860px){ .sheet.sheet-report{ max-width:680px; } }
+
+  .alert-panel{ border:1px solid rgba(251,191,36,.3); background:var(--warn-dim); }
+  .alert-panel h3{ color:var(--warn); }
+
+  .last-update{ font-size:11.5px; margin-top:3px; display:flex; align-items:center; gap:5px; }
+  .last-update .dot{ width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+  .last-update.fresh{ color:var(--text-muted); }
+  .last-update.fresh .dot{ background:var(--ok); }
+  .last-update.aging{ color:var(--warn); }
+  .last-update.aging .dot{ background:var(--warn); }
+  .last-update.stale{ color:var(--danger); }
+  .last-update.stale .dot{ background:var(--danger); }
+
+  /* ---------- Экран входа ---------- */
+  #loginScreen{
+    position:fixed; inset:0; z-index:1000; background:var(--bg);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .login-card{
+    width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line);
+    border-radius:16px; padding:32px 26px;
+  }
+  .login-brand{
+    font-family:var(--font-display); font-size:28px; letter-spacing:.5px;
+    display:flex; align-items:center; gap:9px; justify-content:center; margin-bottom:6px;
+  }
+  .login-brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .login-sub{ text-align:center; font-size:12.5px; color:var(--text-muted); margin-bottom:24px; }
+  .login-error{ color:var(--danger); font-size:12.5px; text-align:center; margin-top:4px; min-height:16px; }
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+    align-items:flex-end; justify-content:center; z-index:50;
+  }
+  .overlay.show{ display:flex; }
+  .sheet{
+    background: var(--surface); width:100%; max-width:460px; border-radius:16px 16px 0 0;
+    padding:20px 20px 24px; border:1px solid var(--line); border-bottom:none;
+    max-height:86vh; overflow-y:auto;
+  }
+  @media (min-width:860px){
+    .overlay{ align-items:center; }
+    .sheet{ border-radius:16px; border-bottom:1px solid var(--line); }
+  }
+  .sheet-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .sheet-head h3{ font-size:16px; font-weight:700; }
+  .close-x{ width:28px; height:28px; border-radius:8px; background:var(--surface-2); border:none; color:var(--text-muted); cursor:pointer; font-size:16px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px; }
+  .field input, .field select, .field textarea{
+    width:100%; background:var(--surface-2); border:1px solid var(--line); border-radius:9px;
+    padding:11px 12px; color:var(--text); font-family:var(--font-body); font-size:14px;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{ outline:none; border-color:var(--accent); }
+  .field-row{ display:flex; gap:10px; }
+  .field-row .field{ flex:1; }
+  .field-note{ font-size:11.5px; color:var(--text-muted); margin-top:5px; }
+  .bulk-row{ display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+  .bulk-row input{
+    background:var(--surface-2); border:1px solid var(--line); border-radius:9px;
+    padding:10px 11px; color:var(--text); font-family:var(--font-body); font-size:13.5px;
+  }
+  .bulk-row input:focus{ outline:none; border-color:var(--accent); }
+  .bulk-title{ flex:1; min-width:0; }
+  .bulk-price{ width:110px; flex-shrink:0; }
+  .bulk-remove{
+    flex-shrink:0; width:34px; height:34px; border-radius:8px; background:var(--surface-2);
+    border:1px solid var(--line); color:var(--text-muted); cursor:pointer; font-size:14px;
+  }
+  .bulk-remove:hover{ color:var(--danger); border-color:var(--danger); }
+  .btn-row{ display:flex; gap:10px; margin-top:6px; }
+  .btn{
+    flex:1; padding:12px; border-radius:10px; font-weight:700; font-size:14px; cursor:pointer; border:none;
+    font-family:var(--font-body);
+  }
+  .btn-primary{ background:var(--accent); color:#1a0a05; }
+  .btn-primary:hover{ filter:brightness(1.06); }
+  .btn-ghost{ background:var(--surface-2); color:var(--text); border:1px solid var(--line); }
+  .btn-danger{ background:rgba(255,77,46,.1); color:var(--accent); border:1px solid rgba(255,77,46,.25); flex:0 0 auto; padding:12px 16px;}
+
+  .quick-choice{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .qc-btn{
+    background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:16px 8px;
+    display:flex; flex-direction:column; align-items:center; gap:8px; cursor:pointer;
+  }
+  .qc-btn:hover{ border-color:var(--accent); }
+  .qc-btn svg{ width:22px; height:22px; color:var(--accent); }
+  .qc-btn span{ font-size:12px; font-weight:600; }
+
+  /* ---------- Bottom nav (mobile) ---------- */
+  .bottom-nav{ display:none; }
+
+  /* ---------- Responsive: mobile / Telegram phone view ---------- */
+  @media (max-width: 820px){
+    .sidebar{ display:none; }
+    .content{ padding: 16px 14px 90px; }
+    .topbar{ padding:14px 16px; }
+    .grid{ grid-template-columns: repeat(2,1fr); }
+    .bottom-nav{
+      display:flex; position:fixed; bottom:0; left:0; right:0; height:64px;
+      background: var(--surface); border-top:1px solid var(--line); z-index:20;
+    }
+    .bn-item{
+      flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+      color:var(--text-muted); font-size:10.5px; font-weight:600; cursor:pointer;
+    }
+    .bn-item svg{ width:20px; height:20px; }
+    .bn-item.active{ color:var(--accent); }
+    .fab span{ display:none; }
+    .fab{ padding:11px; border-radius:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-brand"><span class="dot"></span>REELS STUDIO</div>
+    <div class="login-sub">Внутренний инструмент — вход только для команды</div>
+    <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
+    <div class="field"><label>Пароль</label><input id="loginPass" type="password" autocomplete="current-password"></div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;">Войти</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- SIDEBAR (desktop / Telegram Desktop) -->
+  <div class="sidebar">
+    <div class="brand"><span class="dot"></span>REELS STUDIO</div>
+    <div class="nav-item active" data-tab="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h4v8H3zM10 8h4v13h-4zM17 3h4v18h-4z"/></svg>
+      Обзор
+    </div>
+    <div class="nav-item" data-tab="clients">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Клиенты
+    </div>
+    <div class="nav-item" data-tab="payments">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+      Оплаты
+    </div>
+    <div class="nav-item" data-tab="reels">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="M17 9l5-3v12l-5-3"/></svg>
+      Ролики
+    </div>
+    <div class="nav-item" data-tab="managers">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      Менеджеры
+    </div>
+    <div class="nav-item" data-tab="tasks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M8 15l2 2 4-4"/></svg>
+      Задачи
+    </div>
+    <div class="sidebar-footer">Reels Studio · v0.4<br>Прототип мини-аппа<br><a href="#" id="logoutLink" style="color:var(--accent); text-decoration:none;">Выйти</a></div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="pageTitle">Обзор</h1>
+        <div class="sub" id="pageSub">Ваша студия за июль</div>
+      </div>
+      <button class="fab" id="quickAddBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Добавить</span>
+      </button>
+    </div>
+
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<!-- bottom nav mobile -->
+<div class="bottom-nav">
+  <div class="bn-item active" data-tab="dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h4v8H3zM10 8h4v13h-4zM17 3h4v18h-4z"/></svg>
+    Обзор
+  </div>
+  <div class="bn-item" data-tab="clients">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/></svg>
+    Клиенты
+  </div>
+  <div class="bn-item" data-tab="payments">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+    Оплаты
+  </div>
+  <div class="bn-item" data-tab="reels">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="M17 9l5-3v12l-5-3"/></svg>
+    Ролики
+  </div>
+  <div class="bn-item" data-tab="managers">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    Менеджеры
+  </div>
+  <div class="bn-item" data-tab="tasks">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M8 15l2 2 4-4"/></svg>
+    Задачи
+  </div>
+</div>
+
+<!-- OVERLAY / MODAL -->
+<div class="overlay" id="overlay">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ==================================================================
+   НАСТРОЙКА БАЗЫ ДАННЫХ (Supabase)
+   Впишите сюда данные вашего проекта — они есть в Supabase:
+   Project Settings → API → Project URL и anon public key
+================================================================== */
+const SUPABASE_URL = 'https://hqlyrqxkztohejbpcwlr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Sbu3jaWeAOrm-GgyLIG45w_mouwEypS';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---------------- STATE (загружается из базы при старте) ----------------
+   Модель баланса:
+   - Оплата (payment) фиксирует сумму И количество купленных роликов (reelsCount)
+   - Ролик (reel) — просто факт "готово ещё N роликов" для клиента (по умолчанию 1)
+   - Остаток клиента = сумма reelsCount по всем его оплатам − сумма готовых роликов
+------------------------------------------------------------------ */
+let clients = [];
+let payments = [];
+let reels = [];
+let managers = [];
+let tasks = [];
+let activeTab = 'dashboard';
+let clientFilter = '';
+let selectedManagerId = null;
+let selectedManagerMonthOffset = 0;
+let taskManagerFilter = '';
+let taskHistoryOpen = false;
+
+/* ---------------- ЗАГРУЗКА / СОХРАНЕНИЕ (Supabase) ---------------- */
+const rowToClient = r => ({id:r.id, name:r.name, tag:r.tag, note:r.note, color:r.color, managerId:r.manager_id, confirmedDate:r.confirmed_date, basePrice:r.base_price, referrerId:r.referrer_id});
+const rowToPayment = r => ({id:r.id, clientId:r.client_id, amount:r.amount, reelsCount:r.reels_count, date:r.date, comment:r.comment});
+const rowToReel = r => ({id:r.id, clientId:r.client_id, note:r.note, date:r.date, price:r.price});
+const rowToManager = r => ({id:r.id, name:r.name});
+const rowToTask = r => ({id:r.id, managerId:r.manager_id, clientId:r.client_id, title:r.title, checklist:r.checklist||[], deadline:r.deadline, done:r.done, createdDate:r.created_date, doneDate:r.done_date});
+
+async function loadAll(){
+  const content = document.getElementById('content');
+  content.innerHTML = '<div style="padding:40px 0; text-align:center; color:var(--text-muted);">Загрузка данных...</div>';
+  try{
+    const [c,p,r,m,t] = await Promise.all([
+      db.from('clients').select('*').order('id').range(0, 49999),
+      db.from('payments').select('*').order('id').range(0, 49999),
+      db.from('reels').select('*').order('id').range(0, 49999),
+      db.from('managers').select('*').order('id').range(0, 49999),
+      db.from('tasks').select('*').order('id').range(0, 49999),
+    ]);
+    if(c.error || p.error || r.error || m.error || t.error){
+      content.innerHTML = `<div style="padding:24px; color:var(--danger);">Не удалось загрузить данные. Проверьте SUPABASE_URL и SUPABASE_ANON_KEY в коде.<br><br>${(c.error||p.error||r.error||m.error||t.error).message}</div>`;
+      return;
+    }
+    clients = c.data.map(rowToClient);
+    payments = p.data.map(rowToPayment);
+    reels = r.data.map(rowToReel);
+    managers = m.data.map(rowToManager);
+    tasks = t.data.map(rowToTask);
+    render();
+  }catch(e){
+    content.innerHTML = `<div style="padding:24px; color:var(--danger);">Ошибка соединения с базой: ${e.message}</div>`;
+  }
+}
+
+/* ---------------- HELPERS ---------------- */
+const fmtMoney = n => '₽' + n.toLocaleString('ru-RU');
+const clientById = id => clients.find(c => c.id === id);
+const initials = name => name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+
+const monthNamesShort = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+
+function totalRevenue(){ return payments.reduce((s,p)=>s+p.amount,0); }
+function revenueThisMonth(){
+  const now = new Date();
+  return payments.filter(p=>{ const d=new Date(p.date); return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth(); })
+    .reduce((s,p)=>s+p.amount,0);
+}
+function revenueLastMonth(){
+  const now = new Date();
+  let m = now.getMonth()-1, y = now.getFullYear(); if(m<0){m=11;y--;}
+  return payments.filter(p=>{ const d=new Date(p.date); return d.getFullYear()===y && d.getMonth()===m; })
+    .reduce((s,p)=>s+p.amount,0);
+}
+function clientTotalPaid(id){ return payments.filter(p=>p.clientId===id).reduce((s,p)=>s+p.amount,0); }
+function clientReelsPurchased(id){ return payments.filter(p=>p.clientId===id).reduce((s,p)=>s+p.reelsCount,0); }
+function clientReelsDone(id){ return reels.filter(r=>r.clientId===id).length; }
+function clientBalance(id){ return clientReelsPurchased(id) - clientReelsDone(id); }
+
+/* Средняя цена за ролик у клиента: сумма всех его оплат / кол-во купленных роликов.
+   Используется как крайний запасной вариант, если у клиента ещё не проставлена
+   базовая цена и у конкретного ролика тоже нет своей цены. */
+function clientPricePerReel(id){
+  const purchased = clientReelsPurchased(id);
+  if(!purchased) return 0;
+  return clientTotalPaid(id) / purchased;
+}
+/* Цена конкретного ролика — по приоритету:
+   1) цена, проставленная именно у этого ролика
+   2) базовая цена клиента (проставляется вручную в карточке клиента)
+   3) средняя оценка по оплатам (запасной вариант, если ничего не указано) */
+function hasValue(v){ return v !== null && v !== undefined && v !== ''; }
+function reelEffectivePrice(r){
+  if(hasValue(r.price)) return Number(r.price);
+  const c = clientById(r.clientId);
+  if(c && hasValue(c.basePrice)) return Number(c.basePrice);
+  return clientPricePerReel(r.clientId);
+}
+function clientEarnedTotal(id){
+  return reels.filter(r=>r.clientId===id).reduce((s,r)=>s+reelEffectivePrice(r),0);
+}
+
+/* ---------------- РЕФЕРАЛЬНАЯ СИСТЕМА ----------------
+   referrerId клиента — кто его привёл. За каждый готовый ролик приведённого
+   клиента реферер получает ₽100 — это либо уменьшает его долг, либо
+   увеличивает его доступный бюджет (если долга уже нет). */
+function referredClients(clientId){ return clients.filter(c=>c.referrerId===clientId); }
+function referralReels(clientId){
+  const ids = referredClients(clientId).map(c=>c.id);
+  return reels.filter(r=>ids.includes(r.clientId));
+}
+function referralBonus(clientId){ return referralReels(clientId).length * 100; }
+
+/* Чистый баланс клиента в деньгах: заработано минус оплачено минус реферальный бонус.
+   Положительное значение — клиент должен, отрицательное — у него запас (заморожено). */
+function clientNetOwed(id){
+  return clientEarnedTotal(id) - clientTotalPaid(id) - referralBonus(id);
+}
+/* Долг клиента: если реально заработанная сумма (по цене каждого ролика —
+   своя цена ролика, иначе базовая, иначе средняя оценка) больше, чем он
+   заплатил и заработал реферальным бонусом — разница и есть долг. */
+function clientDebt(id){
+  return Math.max(clientNetOwed(id), 0);
+}
+function clientFrozenBudget(id){
+  return Math.max(-clientNetOwed(id), 0);
+}
+function totalFrozenBudget(){
+  return clients.reduce((s,c)=>s+clientFrozenBudget(c.id),0);
+}
+function reelsInMonth(monthOffset){
+  const now = new Date();
+  let m = now.getMonth()-monthOffset, y = now.getFullYear();
+  while(m<0){m+=12;y--;}
+  return reels.filter(r=>{const d=new Date(r.date); return d.getMonth()===m && d.getFullYear()===y;});
+}
+function earnedInMonth(monthOffset){
+  return reelsInMonth(monthOffset).reduce((s,r)=>s+reelEffectivePrice(r),0);
+}
+
+/* ---------------- МЕНЕДЖЕРЫ ---------------- */
+function managerById(id){ return managers.find(m=>m.id===id); }
+function managerClients(managerId){ return clients.filter(c=>c.managerId===managerId); }
+function managerReelsDoneInMonth(managerId, monthOffset){
+  const clientIds = managerClients(managerId).map(c=>c.id);
+  return reelsInMonth(monthOffset).filter(r=>clientIds.includes(r.clientId)).length;
+}
+function managerRevenueInMonth(managerId, monthOffset){
+  return managerReelsDoneInMonth(managerId, monthOffset) * 100;
+}
+function monthOffsetLabel(offset){
+  const now = new Date();
+  let m = now.getMonth()-offset, y = now.getFullYear();
+  while(m<0){m+=12;y--;}
+  const names = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  return `${names[m]} ${y}`;
+}
+function monthOptionsHtml(selected){
+  let html = '';
+  for(let i=0;i<12;i++){
+    html += `<option value="${i}" ${i===selected?'selected':''}>${i===0?'Этот месяц':monthOffsetLabel(i)}</option>`;
+  }
+  return html;
+}
+
+/* ---------------- ПОДТВЕРЖДЕНИЕ АКТУАЛЬНОСТИ ---------------- */
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function isConfirmedToday(c){ return c.confirmedDate === todayStr(); }
+function confirmedInfo(c){
+  if(isConfirmedToday(c)) return {cls:'fresh', text:'Подтверждено сегодня'};
+  if(c.confirmedDate){
+    const diff = Math.round((new Date(todayStr()) - new Date(c.confirmedDate)) / (1000*60*60*24));
+    return {cls: diff<=1 ? 'aging' : 'stale', text:`Не подтверждено сегодня (в последний раз ${diff} дн. назад)`};
+  }
+  return {cls:'stale', text:'Ни разу не подтверждалось'};
+}
+function confirmBtnHtml(c){
+  const confirmed = isConfirmedToday(c);
+  return `<button class="confirm-btn ${confirmed?'confirmed':''}" data-confirm-client="${c.id}" title="${confirmed?'Подтверждено — нажмите, чтобы снять':'Подтвердить, что карточка актуальна на сегодня'}" type="button">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+  </button>`;
+}
+async function toggleConfirm(clientId){
+  const c = clientById(clientId);
+  const newDate = isConfirmedToday(c) ? null : todayStr();
+  const {error} = await db.from('clients').update({confirmed_date:newDate}).eq('id', clientId);
+  if(error){ alert('Не удалось сохранить: '+error.message); return; }
+  c.confirmedDate = newDate;
+  render();
+}
+
+function clientLastReelDate(id){
+  const cReels = reels.filter(r=>r.clientId===id);
+  if(cReels.length===0) return null;
+  return cReels.reduce((latest,r)=> new Date(r.date) > new Date(latest) ? r.date : latest, cReels[0].date);
+}
+
+/* Группировка роликов по "пакету оплаты": каждая оплата открывает пакет,
+   в который попадают все ролики с датой ПОЗЖЕ этой оплаты и РАНЬШЕ следующей.
+   Чисто для удобства просмотра — на подсчёты остатка/бюджета не влияет.
+   desc=true (по умолчанию) — новые пакеты сверху (для карточки клиента).
+   desc=false — по порядку от старых к новым (для отчёта). */
+function groupReelsByPayment(clientId, desc=true){
+  const cPayments = payments.filter(p=>p.clientId===clientId).sort((a,b)=> new Date(a.date)-new Date(b.date));
+  const cReels = reels.filter(r=>r.clientId===clientId);
+  const dir = desc ? -1 : 1;
+  const groups = cPayments.map((p, idx) => {
+    const start = new Date(p.date);
+    const next = cPayments[idx+1];
+    const end = next ? new Date(next.date) : null;
+    const groupReels = cReels.filter(r=>{
+      const d = new Date(r.date);
+      return d >= start && (!end || d < end);
+    }).sort((a,b)=> dir*(new Date(b.date)-new Date(a.date)));
+    return {payment:p, reels:groupReels};
+  });
+  if(desc) groups.reverse(); // новые пакеты сверху
+
+  const orphan = cPayments.length
+    ? cReels.filter(r=> new Date(r.date) < new Date(cPayments[0].date))
+    : cReels.slice();
+  orphan.sort((a,b)=> dir*(new Date(b.date)-new Date(a.date)));
+
+  return {groups, orphan};
+}
+
+/* Сквозная нумерация роликов клиента в хронологическом порядке (для отчёта и таблиц) */
+function numberReelsForClient(clientId){
+  const asc = reels.filter(r=>r.clientId===clientId).sort((a,b)=> new Date(a.date)-new Date(b.date) || a.id-b.id);
+  const map = new Map();
+  asc.forEach((r,i)=> map.set(r.id, i+1));
+  return map;
+}
+
+/* Таблица роликов: № / название / дата / цена + подытог. clickable — делает строки
+   кликабельными для редактирования (используется внутри рабочей карточки клиента,
+   но не в чистом отчёте для клиента). */
+function reelTableHtml(list, numberMap, clickable){
+  if(list.length===0) return '<div style="color:var(--text-muted); font-size:12.5px; padding:10px 0;">Пока нет роликов</div>';
+  let total = 0;
+  const rows = list.map(r=>{
+    const price = reelEffectivePrice(r);
+    total += price;
+    return `<tr class="reel-tr ${clickable?'clickable':''}" ${clickable?`data-client-reel="${r.id}"`:''}>
+      <td class="rt-num">${numberMap.get(r.id) ?? ''}</td>
+      <td class="rt-name">${r.note||'Без названия'}</td>
+      <td class="rt-date">${formatDate(r.date)}</td>
+      <td class="rt-price">${fmtMoney(Math.round(price))}</td>
+    </tr>`;
+  }).join('');
+  return `<table class="reel-table"><thead><tr><th>№</th><th>Ролик</th><th>Дата</th><th>Цена</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="reel-table-subtotal">Итого: ${fmtMoney(Math.round(total))}</div>`;
+}
+
+const NOW = new Date();
+function daysAgoLabel(dateStr){
+  if(!dateStr) return {text:'ролики ещё не добавлялись', cls:'stale'};
+  const d = new Date(dateStr);
+  const diff = Math.round((NOW - d) / (1000*60*60*24));
+  let text;
+  if(diff<=0) text = 'сегодня';
+  else if(diff===1) text = 'вчера';
+  else text = `${diff} дн. назад`;
+  const cls = diff>14 ? 'stale' : diff>7 ? 'aging' : 'fresh';
+  return {text, cls};
+}
+
+function balanceClass(n){
+  if(n<=0) return 'danger';
+  if(n<=2) return 'warn';
+  return 'ok';
+}
+function balanceBadge(n, debt){
+  const cls = balanceClass(n);
+  const label = n<0 ? `${n} (перерасход)` : n;
+  const debtHtml = (n<0 && debt) ? `<span style="display:block; font-size:10px; font-weight:700; margin-top:2px;">должен ${fmtMoney(Math.round(debt))}</span>` : '';
+  return `<span class="balance ${cls}" style="text-align:center;"><span class="n">${label}</span> ост.${debtHtml}</span>`;
+}
+
+/* Статус активности клиента по дате последнего ролика:
+   зелёный (fresh) — активный, жёлтый (aging) — нет материалов давно,
+   красный (stale) — клиент, похоже, ушёл (или ролика не было вообще) */
+function clientActivity(id){
+  const dateStr = clientLastReelDate(id);
+  const lu = daysAgoLabel(dateStr);
+  const diff = dateStr ? Math.round((NOW - new Date(dateStr)) / (1000*60*60*24)) : Infinity;
+  const order = lu.cls==='fresh' ? 0 : lu.cls==='aging' ? 1 : 2;
+  const statusLabel = lu.cls==='fresh' ? 'Активный клиент' : lu.cls==='aging' ? 'Нет материалов' : 'Клиент ушёл';
+  return {cls:lu.cls, text:lu.text, diff, order, statusLabel};
+}
+
+function formatDate(d){
+  const date = new Date(d);
+  return date.getDate() + ' ' + monthNamesShort[date.getMonth()];
+}
+
+/* ---------------- ЗАДАЧИ ---------------- */
+function activeTasks(){ return tasks.filter(t=>!t.done); }
+function doneTasks(){ return tasks.filter(t=>t.done); }
+function activeTasksForClient(clientId){ return activeTasks().filter(t=>t.clientId===clientId); }
+function checklistProgress(checklist){
+  const list = checklist || [];
+  const done = list.filter(i=>i.done).length;
+  return {done, total: list.length};
+}
+function taskDeadlineInfo(t){
+  if(!t.deadline) return {cls:'', text:'без срока'};
+  const d = new Date(t.deadline);
+  const diff = Math.round((new Date(todayStr()) - d) / (1000*60*60*24));
+  if(t.done) return {cls:'fresh', text:`срок ${formatDate(t.deadline)}`};
+  if(diff > 0) return {cls:'stale', text:`просрочено, срок был ${formatDate(t.deadline)}`};
+  if(diff === 0) return {cls:'aging', text:'срок сегодня'};
+  if(diff >= -2) return {cls:'aging', text:`срок ${formatDate(t.deadline)} (скоро)`};
+  return {cls:'fresh', text:`срок ${formatDate(t.deadline)}`};
+}
+function overdueTasksCount(){
+  const today = todayStr();
+  return activeTasks().filter(t=>t.deadline && t.deadline < today).length;
+}
+function dueSoonTasksCount(){
+  const today = todayStr();
+  return activeTasks().filter(t=>{
+    if(!t.deadline || t.deadline < today) return false;
+    const diff = Math.round((new Date(t.deadline) - new Date(today)) / (1000*60*60*24));
+    return diff <= 2;
+  }).length;
+}
+function taskClientBadge(clientId){
+  const n = activeTasksForClient(clientId).length;
+  if(!n) return '';
+  return `<span class="no-manager-badge" style="color:var(--warn); background:var(--warn-dim);" title="${n} активных задач(и) по этому клиенту">⚠ ${n} задач${n===1?'а':n<5?'и':''}</span>`;
+}
+function taskManagerSelectHtml(t){
+  const options = ['<option value="">Без менеджера</option>']
+    .concat(managers.map(m=>`<option value="${m.id}" ${t.managerId===m.id?'selected':''}>${m.name}</option>`));
+  return `<select class="manager-select" id="fTaskManager" style="max-width:none; width:100%;">${options.join('')}</select>`;
+}
+function taskClientSelectHtml(t, lockedClientId){
+  if(lockedClientId){
+    const c = clientById(lockedClientId);
+    return `<div style="padding:11px 12px; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; font-size:14px;">${c?c.name:'—'}</div>`;
+  }
+  const options = ['<option value="">Без привязки к клиенту</option>']
+    .concat(clients.map(c=>`<option value="${c.id}" ${t.clientId===c.id?'selected':''}>${c.name}</option>`));
+  return `<select id="fTaskClient" style="width:100%;">${options.join('')}</select>`;
+}
+function checklistEditorHtml(items){
+  if(items.length===0) return '<div style="color:var(--text-muted); font-size:12px; padding:4px 0 8px;">Чек-лист пуст</div>';
+  return items.map((it,i)=>`
+    <div class="bulk-row" data-checklist-idx="${i}">
+      <input class="bulk-title" data-cl-text="${i}" placeholder="Пункт чек-листа" value="${(it.text||'').replace(/"/g,'&quot;')}">
+      <button class="bulk-remove" data-cl-remove="${i}" type="button">✕</button>
+    </div>`).join('');
+}
+function taskRowHtml(t){
+  const c = t.clientId ? clientById(t.clientId) : null;
+  const m = t.managerId ? managerById(t.managerId) : null;
+  const dl = taskDeadlineInfo(t);
+  const prog = checklistProgress(t.checklist);
+  return `
+    <div class="row" data-task="${t.id}">
+      <button class="confirm-btn ${t.done?'confirmed':''}" data-task-done="${t.id}" title="${t.done?'Выполнено — нажмите, чтобы вернуть':'Отметить выполненной'}" type="button" style="flex-shrink:0;">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+      </button>
+      <div style="min-width:0;">
+        <div class="title">${t.title}</div>
+        <div class="subtitle">
+          ${c ? `${c.name} · ` : ''}${m ? m.name : 'без менеджера'}${prog.total ? ` · чек-лист ${prog.done}/${prog.total}` : ''}
+        </div>
+        ${dl.text ? `<div class="last-update ${dl.cls}"><span class="dot"></span>${dl.text}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+function renderTasks(){
+  const managerOptions = ['<option value="">Все менеджеры</option>']
+    .concat(managers.map(m=>`<option value="${m.id}" ${taskManagerFilter==String(m.id)?'selected':''}>${m.name}</option>`));
+  let active = activeTasks();
+  let done = doneTasks();
+  if(taskManagerFilter){
+    const mid = parseInt(taskManagerFilter);
+    active = active.filter(t=>t.managerId===mid);
+    done = done.filter(t=>t.managerId===mid);
+  }
+  active = [...active].sort((a,b)=>{
+    if(!a.deadline && !b.deadline) return 0;
+    if(!a.deadline) return 1;
+    if(!b.deadline) return -1;
+    return new Date(a.deadline) - new Date(b.deadline);
+  });
+  done = [...done].sort((a,b)=> new Date(b.doneDate||b.createdDate) - new Date(a.doneDate||a.createdDate));
+
+  return `
+    <div class="btn-row" style="margin-bottom:14px; justify-content:flex-start;">
+      <button class="btn btn-primary" id="addTaskBtn" style="flex:0 0 auto; padding:12px 22px;">+ Новая задача</button>
+    </div>
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="label">Активных задач</div>
+        <div class="value" style="font-size:22px;">${active.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">🔴 Просрочено</div>
+        <div class="value" style="color:var(--danger); font-size:22px;">${overdueTasksCount()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">🟡 Срок скоро</div>
+        <div class="value" style="color:var(--warn); font-size:22px;">${dueSoonTasksCount()}</div>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:6px;"><label>Фильтр по менеджеру</label><select id="taskManagerFilter" style="width:100%; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; padding:11px 12px; color:var(--text);">${managerOptions.join('')}</select></div>
+    <div class="panel">
+      ${active.length===0 ? '<div style="color:var(--text-muted); font-size:13.5px; padding:8px 0;">Нет активных задач</div>' :
+      active.map(taskRowHtml).join('')}
+    </div>
+    <details class="reel-group" ${taskHistoryOpen?'open':''} id="taskHistoryDetails">
+      <summary>
+        <div><div class="pkg-title">История выполненных</div><div class="pkg-meta">${done.length} задач(и)</div></div>
+        <span class="pkg-count">${done.length}</span>
+      </summary>
+      <div class="reel-group-body">
+        ${done.length===0 ? '<div style="color:var(--text-muted); font-size:12.5px; padding:10px 0;">Пока пусто</div>' : done.map(taskRowHtml).join('')}
+      </div>
+    </details>
+  `;
+}
+
+/* ---------------- RENDER: DASHBOARD ---------------- */
+function renderDashboard(){
+  const now = new Date();
+  const months = [];
+  for(let i=5;i>=0;i--){
+    let m = now.getMonth()-i, y = now.getFullYear();
+    while(m<0){m+=12;y--;}
+    months.push({m,y});
+  }
+  const monthly = months.map(({m,y})=>{
+    const sum = payments.filter(p=>{const d=new Date(p.date); return d.getMonth()===m && d.getFullYear()===y;}).reduce((s,p)=>s+p.amount,0);
+    return {label: monthNamesShort[m], sum};
+  });
+  const maxSum = Math.max(...monthly.map(x=>x.sum), 1);
+
+  const totalRemaining = clients.reduce((s,c)=>s+Math.max(clientBalance(c.id),0),0);
+  const lowBalanceClients = clients.filter(c=>clientBalance(c.id)<=2).sort((a,b)=>clientBalance(a.id)-clientBalance(b.id));
+
+  const topClients = [...clients].map(c=>({...c, paid: clientTotalPaid(c.id), frozen: clientFrozenBudget(c.id)})).sort((a,b)=>b.paid-a.paid).slice(0,5);
+  const maxPaid = Math.max(...topClients.map(c=>c.paid),1);
+
+  const thisM = revenueThisMonth(), lastM = revenueLastMonth();
+  const delta = lastM===0 ? 100 : Math.round(((thisM-lastM)/lastM)*100);
+
+  const earnedThisM = earnedInMonth(0), earnedLastM = earnedInMonth(1);
+  const earnedDelta = earnedLastM===0 ? 100 : Math.round(((earnedThisM-earnedLastM)/earnedLastM)*100);
+  const reelsDoneThisM = reelsInMonth(0).length;
+  const frozenTotal = totalFrozenBudget();
+
+  return `
+    <div class="grid">
+      <div class="stat-card">
+        <div class="label">Оборот за месяц</div>
+        <div class="value">${fmtMoney(thisM)}</div>
+        <div class="delta ${delta<0?'neg':''}">${delta>=0?'+':''}${delta}% к пред. месяцу</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Заработано за месяц</div>
+        <div class="value">${fmtMoney(Math.round(earnedThisM))}</div>
+        <div class="delta ${earnedDelta<0?'neg':''}">${earnedDelta>=0?'+':''}${earnedDelta}% к пред. месяцу</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Роликов готово в месяце</div>
+        <div class="value">${reelsDoneThisM}</div>
+        <div class="delta" style="color:var(--text-muted)">всего за всё время: ${reels.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Замороженный бюджет</div>
+        <div class="value">${fmtMoney(Math.round(frozenTotal))}</div>
+        <div class="delta" style="color:${lowBalanceClients.length? 'var(--warn)':'var(--text-muted)'}">оплачено, но не отработано</div>
+      </div>
+    </div>
+
+    ${lowBalanceClients.length ? `
+    <div class="panel alert-panel">
+      <div class="panel-head">
+        <h3>⚠ Заканчиваются ролики</h3>
+        <span class="hint">${lowBalanceClients.length} клиент(ов) нужно продлить</span>
+      </div>
+      ${lowBalanceClients.map(c=>{
+        const lu = daysAgoLabel(clientLastReelDate(c.id));
+        return `
+        <div class="rank-row">
+          <div class="avatar" style="color:${c.color}">${initials(c.name)}</div>
+          <div class="rank-info">
+            <div class="name">${c.name} ${taskClientBadge(c.id)}</div>
+            <div class="meta">куплено ${clientReelsPurchased(c.id)} · готово ${clientReelsDone(c.id)}</div>
+            <div class="last-update ${lu.cls}"><span class="dot"></span>${lu.text}</div>
+          </div>
+          ${balanceBadge(clientBalance(c.id), clientDebt(c.id))}
+        </div>`;}).join('')}
+    </div>` : ''}
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Доход по месяцам</h3>
+        <span class="hint">последние 6 месяцев</span>
+      </div>
+      <div class="filmrule"></div>
+      <div class="chart">
+        ${monthly.map(x=>`
+          <div class="col">
+            <div class="bar-wrap"><div class="bar" style="height:${x.sum? (x.sum/maxSum*100):2}%"></div></div>
+            <div class="m-value">${x.sum? Math.round(x.sum/1000)+'к':'—'}</div>
+            <div class="m-label">${x.label}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Топ клиентов по доходу</h3>
+        <span class="hint">всего ${clients.length} клиентов</span>
+      </div>
+      ${topClients.map((c,i)=>`
+        <div class="rank-row">
+          <div class="rank-num">${i+1}</div>
+          <div class="avatar" style="color:${c.color}">${initials(c.name)}</div>
+          <div class="rank-info">
+            <div class="name">${c.name} ${taskClientBadge(c.id)}</div>
+            <div class="meta">${clientReelsDone(c.id)} готово из ${clientReelsPurchased(c.id)}</div>
+            <div class="bar-bg"><div class="bar-fg" style="width:${(c.paid/maxPaid*100)}%; background:${c.color}"></div></div>
+          </div>
+          <div class="rank-amount">${fmtMoney(c.paid)}<div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-top:2px;">заморожено ${fmtMoney(Math.round(c.frozen))}</div></div>
+        </div>`).join('')}
+    </div>
+  `;
+}
+
+/* ---------------- RENDER: CLIENTS ---------------- */
+function managerSelectHtml(c, wide){
+  const options = ['<option value="">Без менеджера</option>']
+    .concat(managers.map(m=>`<option value="${m.id}" ${c.managerId===m.id?'selected':''}>${m.name}</option>`));
+  const style = wide ? ' style="max-width:none; width:100%;"' : '';
+  return `<select class="manager-select" data-manager-client="${c.id}"${style}>${options.join('')}</select>`;
+}
+
+function referrerSelectHtml(c){
+  const options = ['<option value="">Без реферера</option>']
+    .concat(clients.filter(x=>x.id!==c.id).map(x=>`<option value="${x.id}" ${c.referrerId===x.id?'selected':''}>${x.name}</option>`));
+  return `<select class="manager-select" data-referrer-client="${c.id}" style="max-width:none; width:100%;">${options.join('')}</select>`;
+}
+
+/* Таблица реферального бонуса: зелёные строки — ролик приведённого клиента + сам клиент + ₽100 */
+function referralBonusTableHtml(clientId){
+  const refReels = referralReels(clientId).sort((a,b)=> new Date(a.date)-new Date(b.date));
+  if(refReels.length===0) return '<div style="color:var(--text-muted); font-size:12.5px; padding:10px 0;">Пока нет бонусов</div>';
+  const rows = refReels.map(r=>{
+    const rc = clientById(r.clientId);
+    return `<tr class="reel-tr referral-row">
+      <td class="rt-name">${r.note||'Без названия'}</td>
+      <td class="rt-name" style="color:var(--text-muted);">${rc?rc.name:'—'}</td>
+      <td class="rt-date">${formatDate(r.date)}</td>
+      <td class="rt-price">+₽100</td>
+    </tr>`;
+  }).join('');
+  return `<table class="reel-table"><thead><tr><th>Ролик</th><th>Реферал</th><th>Дата</th><th>Бонус</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="reel-table-subtotal" style="color:var(--ok);">Итого бонус: ${fmtMoney(refReels.length*100)}</div>`;
+}
+
+function clientRowHtml(c, lu){
+  const noManager = !c.managerId;
+  const ci = confirmedInfo(c);
+  return `
+    <div class="row ${noManager?'row-no-manager':''}" data-client="${c.id}">
+      <div class="avatar" style="color:${c.color}">${initials(c.name)}</div>
+      <div>
+        <div class="title">${c.name} ${noManager?'<span class="no-manager-badge">⚠ Без менеджера</span>':''} ${taskClientBadge(c.id)}</div>
+        <div class="subtitle">${c.tag} · оплачено ${fmtMoney(clientTotalPaid(c.id))} · заморожено ${fmtMoney(Math.round(clientFrozenBudget(c.id)))}</div>
+        <div class="last-update ${lu.cls}"><span class="dot"></span>${lu.statusLabel} · ${lu.text}</div>
+        <div class="last-update ${ci.cls}"><span class="dot"></span>${ci.text}</div>
+      </div>
+      <div class="right" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        ${managerSelectHtml(c)}
+        <div style="display:flex; align-items:center; gap:8px;">
+          ${confirmBtnHtml(c)}
+          ${balanceBadge(clientBalance(c.id), clientDebt(c.id))}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderClients(){
+  const activeCount = clients.filter(c=>clientActivity(c.id).cls==='fresh').length;
+  const warnCount = clients.filter(c=>clientActivity(c.id).cls==='aging').length;
+  const lostCount = clients.filter(c=>clientActivity(c.id).cls==='stale').length;
+  const noManagerCount = clients.filter(c=>!c.managerId).length;
+  const unconfirmedCount = clients.filter(c=>!isConfirmedToday(c)).length;
+
+  const filtered = clients
+    .filter(c => c.name.toLowerCase().includes(clientFilter.toLowerCase()) || c.tag.toLowerCase().includes(clientFilter.toLowerCase()))
+    .map(c=>({...c, act: clientActivity(c.id)}))
+    .sort((a,b)=> a.act.order - b.act.order || a.act.diff - b.act.diff);
+
+  return `
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="label">🟢 Активные</div>
+        <div class="value" style="color:var(--ok); font-size:22px;">${activeCount}</div>
+        <div class="delta" style="color:var(--text-muted)">ролик за 0–7 дн.</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">🟡 Нет материалов</div>
+        <div class="value" style="color:var(--warn); font-size:22px;">${warnCount}</div>
+        <div class="delta" style="color:var(--text-muted)">8–14 дней тишины</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">🔴 Похоже, ушли</div>
+        <div class="value" style="color:var(--danger); font-size:22px;">${lostCount}</div>
+        <div class="delta" style="color:var(--text-muted)">14+ дней или ни разу</div>
+      </div>
+    </div>
+    ${noManagerCount>0 ? `
+    <div class="panel" style="border:1px solid rgba(255,77,46,.35); background:var(--accent-dim); padding:14px 18px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between;">
+      <span style="font-weight:700; color:var(--accent); font-size:13.5px;">⚠ ${noManagerCount} ${noManagerCount===1?'клиент без менеджера':'клиентов без менеджера'} — назначьте, чтобы не потерялись</span>
+    </div>` : ''}
+    ${unconfirmedCount>0 ? `
+    <div class="panel" style="border:1px solid rgba(251,191,36,.35); background:var(--warn-dim); padding:14px 18px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between;">
+      <span style="font-weight:700; color:var(--warn); font-size:13.5px;">🕓 ${unconfirmedCount} ${unconfirmedCount===1?'карточка не подтверждена':'карточек не подтверждены'} сегодня</span>
+    </div>` : ''}
+    <input class="search" id="clientSearch" placeholder="Найти клиента по имени или тегу..." value="${clientFilter}">
+    <div class="panel">
+      ${filtered.length===0 ? '<div style="color:var(--text-muted); font-size:13.5px; padding:8px 0;">Ничего не найдено</div>' :
+      filtered.map(c=>clientRowHtml(c, c.act)).join('')}
+    </div>
+  `;
+}
+
+/* ---------------- RENDER: МЕНЕДЖЕРЫ ---------------- */
+function renderManagers(){
+  return `
+    <div class="btn-row" style="margin-bottom:18px; justify-content:flex-start;">
+      <button class="btn btn-primary" id="addManagerBtn" style="flex:0 0 auto; padding:12px 22px;">+ Добавить менеджера</button>
+    </div>
+    <div class="grid-3">
+      ${managers.length===0 ? '<div style="color:var(--text-muted); font-size:13.5px;">Менеджеров пока нет — добавьте первого</div>' :
+      managers.map(m=>{
+        const cnt = managerClients(m.id).length;
+        const done = managerReelsDoneInMonth(m.id, 0);
+        const rev = managerRevenueInMonth(m.id, 0);
+        return `
+        <div class="stat-card" data-manager="${m.id}" style="cursor:pointer;">
+          <div class="label">${m.name}</div>
+          <div class="value" style="font-size:20px;">${cnt} ${cnt===1?'клиент':'клиентов'}</div>
+          <div class="delta" style="color:var(--text-muted)">в этом месяце: ${done} готово · ${fmtMoney(rev)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderManagerClients(managerId){
+  const m = managerById(managerId);
+  if(!m) return '<div style="color:var(--text-muted);">Менеджер не найден</div>';
+  const sorted = managerClients(managerId)
+    .map(c=>({...c, act: clientActivity(c.id)}))
+    .sort((a,b)=> a.act.order - b.act.order || a.act.diff - b.act.diff);
+  const offset = selectedManagerMonthOffset;
+  const done = managerReelsDoneInMonth(managerId, offset);
+  const rev = managerRevenueInMonth(managerId, offset);
+  return `
+    <button class="btn btn-ghost" id="backToManagers" style="margin-bottom:16px; width:auto; padding:10px 18px;">← Все менеджеры</button>
+    <div class="panel-head" style="margin-bottom:8px;">
+      <h3>Доход за месяц</h3>
+      <select id="managerMonthSelect" style="background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:6px 10px; color:var(--text); font-size:12.5px;">
+        ${monthOptionsHtml(offset)}
+      </select>
+    </div>
+    <div class="grid-3">
+      <div class="stat-card">
+        <div class="label">Клиентов</div>
+        <div class="value" style="font-size:22px;">${sorted.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Роликов готово</div>
+        <div class="value" style="font-size:22px; color:var(--ok);">${done}</div>
+        <div class="delta" style="color:var(--text-muted)">${offset===0?'в этом месяце':monthOffsetLabel(offset)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Доход</div>
+        <div class="value" style="font-size:22px; color:var(--warn);">${fmtMoney(rev)}</div>
+        <div class="delta" style="color:var(--text-muted)">₽100 за готовый ролик</div>
+      </div>
+    </div>
+    <div class="panel">
+      ${sorted.length===0 ? '<div style="color:var(--text-muted); font-size:13.5px; padding:8px 0;">У этого менеджера пока нет клиентов</div>' :
+      sorted.map(c=>clientRowHtml(c, c.act)).join('')}
+    </div>
+  `;
+}
+
+function openAddManager(){
+  openSheet(`
+    <div class="sheet-head"><h3>Новый менеджер</h3><button class="close-x" id="closeSheet">✕</button></div>
+    <div class="field"><label>Имя менеджера</label><input id="fManagerName" placeholder="Например, Кристина"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="closeSheet2">Отмена</button>
+      <button class="btn btn-primary" id="saveManager">Сохранить</button>
+    </div>
+  `);
+  document.getElementById('saveManager').onclick = async ()=>{
+    const name = document.getElementById('fManagerName').value.trim();
+    if(!name) return;
+    const btn = document.getElementById('saveManager'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    const {data, error} = await db.from('managers').insert({name}).select().single();
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Сохранить'; return; }
+    managers.push(rowToManager(data));
+    closeSheet(); setTab('managers');
+  };
+}
+
+/* ---------------- RENDER: PAYMENTS ---------------- */
+function renderPayments(){
+  const sorted = [...payments].sort((a,b)=> new Date(b.date)-new Date(a.date));
+  return `
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Все оплаты</h3>
+        <span class="hint">${payments.length} записей · ${fmtMoney(totalRevenue())}</span>
+      </div>
+      ${sorted.map(p=>{
+        const c = clientById(p.clientId);
+        return `
+        <div class="row" data-payment="${p.id}">
+          <div class="avatar" style="color:${c.color}">${initials(c.name)}</div>
+          <div>
+            <div class="title">${c.name}</div>
+            <div class="subtitle">${p.comment} · ${p.reelsCount} роликов · ${formatDate(p.date)}</div>
+          </div>
+          <div class="right">
+            <div class="amount" style="color:var(--ok)">+${fmtMoney(p.amount)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+/* ---------------- RENDER: REELS (просто лог готовых роликов) ---------------- */
+function renderReels(){
+  const sorted = [...reels].sort((a,b)=> new Date(b.date)-new Date(a.date));
+  return `
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Готовые ролики</h3>
+        <span class="hint">${reels.length} всего</span>
+      </div>
+      ${sorted.length===0 ? '<div style="color:var(--text-muted); font-size:13.5px; padding:8px 0;">Пока нет готовых роликов</div>' :
+      sorted.map(r=>{
+        const c = clientById(r.clientId);
+        return `
+        <div class="row" data-reel="${r.id}">
+          <div class="avatar" style="color:${c.color}">${initials(c.name)}</div>
+          <div>
+            <div class="title">${r.note || 'Без названия'}</div>
+            <div class="subtitle">${c.name} · ${formatDate(r.date)}</div>
+          </div>
+          <div class="right">
+            <span class="balance ok"><span class="n">✓</span></span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+/* ---------------- TAB SWITCH ---------------- */
+const titles = {
+  dashboard: ['Обзор', 'Ваша студия за июль'],
+  clients: ['Клиенты', clients.length + ' активных клиентов'],
+  payments: ['Оплаты', 'История всех поступлений'],
+  reels: ['Ролики', 'Лог готовых роликов'],
+  managers: ['Менеджеры', managers.length + ' менеджеров'],
+  tasks: ['Задачи', activeTasks().length + ' активных'],
+};
+
+function setTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.nav-item, .bn-item').forEach(el=>{
+    el.classList.toggle('active', el.dataset.tab===tab);
+  });
+  document.getElementById('pageTitle').textContent = titles[tab][0];
+  document.getElementById('pageSub').textContent = titles[tab][1];
+  render();
+}
+
+function openManager(id){
+  activeTab = 'managerClients';
+  selectedManagerId = id;
+  selectedManagerMonthOffset = 0;
+  document.querySelectorAll('.nav-item, .bn-item').forEach(el=>{
+    el.classList.toggle('active', el.dataset.tab==='managers');
+  });
+  const m = managerById(id);
+  document.getElementById('pageTitle').textContent = m ? m.name : 'Менеджер';
+  document.getElementById('pageSub').textContent = managerClients(id).length + ' клиентов';
+  render();
+}
+
+function render(){
+  const content = document.getElementById('content');
+  if(activeTab==='dashboard') content.innerHTML = renderDashboard();
+  if(activeTab==='clients') content.innerHTML = renderClients();
+  if(activeTab==='payments') content.innerHTML = renderPayments();
+  if(activeTab==='reels') content.innerHTML = renderReels();
+  if(activeTab==='managers') content.innerHTML = renderManagers();
+  if(activeTab==='managerClients') content.innerHTML = renderManagerClients(selectedManagerId);
+  if(activeTab==='tasks') content.innerHTML = renderTasks();
+  attachContentEvents();
+}
+
+function attachContentEvents(){
+  const search = document.getElementById('clientSearch');
+  if(search){
+    search.addEventListener('input', e=>{ clientFilter = e.target.value; renderKeepFocus(); });
+  }
+  document.querySelectorAll('[data-client]').forEach(el=>{
+    el.addEventListener('click', ()=> openClientDetail(parseInt(el.dataset.client)));
+  });
+  document.querySelectorAll('[data-payment]').forEach(el=>{
+    el.addEventListener('click', ()=> openEditPayment(parseInt(el.dataset.payment)));
+  });
+  document.querySelectorAll('[data-reel]').forEach(el=>{
+    el.addEventListener('click', ()=> openEditReel(parseInt(el.dataset.reel)));
+  });
+  document.querySelectorAll('[data-manager-client]').forEach(el=>{
+    el.addEventListener('click', e=> e.stopPropagation());
+    el.addEventListener('change', async e=>{
+      e.stopPropagation();
+      const clientId = parseInt(el.dataset.managerClient);
+      const managerId = el.value ? parseInt(el.value) : null;
+      const {error} = await db.from('clients').update({manager_id: managerId}).eq('id', clientId);
+      if(error){ alert('Не удалось сохранить: '+error.message); return; }
+      clientById(clientId).managerId = managerId;
+      render();
+    });
+  });
+  document.querySelectorAll('[data-manager]').forEach(el=>{
+    el.addEventListener('click', ()=> openManager(parseInt(el.dataset.manager)));
+  });
+  document.querySelectorAll('[data-confirm-client]').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      toggleConfirm(parseInt(el.dataset.confirmClient));
+    });
+  });
+  const addManagerBtn = document.getElementById('addManagerBtn');
+  if(addManagerBtn) addManagerBtn.addEventListener('click', openAddManager);
+  const backToManagers = document.getElementById('backToManagers');
+  if(backToManagers) backToManagers.addEventListener('click', ()=> setTab('managers'));
+  const managerMonthSelect = document.getElementById('managerMonthSelect');
+  if(managerMonthSelect) managerMonthSelect.addEventListener('change', e=>{
+    selectedManagerMonthOffset = parseInt(e.target.value);
+    render();
+  });
+  const addTaskBtn = document.getElementById('addTaskBtn');
+  if(addTaskBtn) addTaskBtn.addEventListener('click', ()=> openAddTask());
+  const taskManagerFilterEl = document.getElementById('taskManagerFilter');
+  if(taskManagerFilterEl) taskManagerFilterEl.addEventListener('change', e=>{
+    taskManagerFilter = e.target.value;
+    render();
+  });
+  const taskHistoryDetails = document.getElementById('taskHistoryDetails');
+  if(taskHistoryDetails) taskHistoryDetails.addEventListener('toggle', e=>{
+    taskHistoryOpen = taskHistoryDetails.open;
+  });
+  document.querySelectorAll('[data-task]').forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.closest('[data-task-done]')) return;
+      openEditTask(parseInt(el.dataset.task));
+    });
+  });
+  document.querySelectorAll('[data-task-done]').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      toggleTaskDone(parseInt(el.dataset.taskDone));
+    });
+  });
+}
+
+function renderKeepFocus(){
+  const content = document.getElementById('content');
+  content.innerHTML = renderClients();
+  attachContentEvents();
+  const s = document.getElementById('clientSearch');
+  s.focus(); s.setSelectionRange(s.value.length, s.value.length);
+}
+
+/* ---------------- MODALS ---------------- */
+const overlay = document.getElementById('overlay');
+const sheet = document.getElementById('sheet');
+function openSheet(html, extraClass){
+  sheet.innerHTML = html;
+  sheet.className = 'sheet' + (extraClass ? ' '+extraClass : '');
+  overlay.classList.add('show');
+  attachSheetEvents();
+}
+function closeSheet(){ overlay.classList.remove('show'); }
+overlay.addEventListener('click', e=>{ if(e.target===overlay) closeSheet(); });
+
+function clientOptions(selectedId){
+  return clients.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.name} (ост. ${clientBalance(c.id)})</option>`).join('');
+}
+
+function openQuickAdd(){
+  openSheet(`
+    <div class="sheet-head"><h3>Что добавляем?</h3><button class="close-x" id="closeSheet">✕</button></div>
+    <div class="quick-choice">
+      <div class="qc-btn" id="qcClient">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/></svg>
+        <span>Клиент</span>
+      </div>
+      <div class="qc-btn" id="qcPayment">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>
+        <span>Оплата</span>
+      </div>
+      <div class="qc-btn" id="qcReel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="15" height="14" rx="2"/><path d="M17 9l5-3v12l-5-3"/></svg>
+        <span>Готовый ролик</span>
+      </div>
+      <div class="qc-btn" id="qcTask">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M8 15l2 2 4-4"/></svg>
+        <span>Задача</span>
+      </div>
+    </div>
+  `);
+}
+
+function openAddClient(){
+  openSheet(`
+    <div class="sheet-head"><h3>Новый клиент</h3><button class="close-x" id="closeSheet">✕</button></div>
+    <div class="field"><label>Имя / название</label><input id="fName" placeholder="Например, Марина Ковалёва"></div>
+    <div class="field"><label>Telegram / тег</label><input id="fTag" placeholder="@username"></div>
+    <div class="field"><label>Заметка</label><input id="fNote" placeholder="Ниша, договорённости..."></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="closeSheet2">Отмена</button>
+      <button class="btn btn-primary" id="saveClient">Сохранить</button>
+    </div>
+  `);
+  document.getElementById('saveClient').onclick = async ()=>{
+    const name = document.getElementById('fName').value.trim();
+    if(!name) return;
+    const palette = ['#FF4D2E','#8B8FFF','#4ADE80','#FBBF24'];
+    const tag = document.getElementById('fTag').value.trim()||'—';
+    const note = document.getElementById('fNote').value.trim();
+    const color = palette[clients.length%palette.length];
+    const btn = document.getElementById('saveClient'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    const {data, error} = await db.from('clients').insert({name, tag, note, color}).select().single();
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Сохранить'; return; }
+    clients.push(rowToClient(data));
+    closeSheet(); setTab('clients');
+  };
+}
+
+function openClientDetail(id){
+  const c = clientById(id);
+  const cPayments = payments.filter(p=>p.clientId===id).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const bal = clientBalance(id);
+  openSheet(`
+    <div class="sheet-head">
+      <h3>${c.name} ${taskClientBadge(id)}</h3>
+      <button class="close-x" id="closeSheet">✕</button>
+    </div>
+    <div class="last-update ${daysAgoLabel(clientLastReelDate(id)).cls}" style="margin-bottom:10px;"><span class="dot"></span>Последний ролик: ${daysAgoLabel(clientLastReelDate(id)).text}</div>
+    ${activeTasksForClient(id).length ? `
+    <div class="panel" style="padding:12px 16px; margin-bottom:14px; border:1px solid rgba(251,191,36,.3); background:var(--warn-dim);">
+      <div style="font-weight:700; color:var(--warn); font-size:13px; margin-bottom:8px;">⚠ Открытые задачи по клиенту</div>
+      ${activeTasksForClient(id).map(t=>`<div class="row" data-task="${t.id}" style="padding:8px 0;"><div><div class="title" style="font-size:13px;">${t.title}</div><div class="subtitle">${taskDeadlineInfo(t).text}</div></div></div>`).join('')}
+    </div>` : ''}
+    <div class="btn-row" style="margin-bottom:14px;">
+      <button class="btn btn-ghost" id="addTaskForClient">+ Задача по клиенту</button>
+    </div>
+    <div class="panel" style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; margin-bottom:14px;">
+      <div class="last-update ${confirmedInfo(c).cls}" style="margin:0;"><span class="dot"></span>${confirmedInfo(c).text}</div>
+      ${confirmBtnHtml(c)}
+    </div>
+    <div class="field" style="margin-bottom:14px;"><label>Менеджер</label>${managerSelectHtml(c, true)}</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label>Реферер (кто привёл этого клиента)</label>
+      ${referrerSelectHtml(c)}
+      <div class="field-note">Если указан — реферер получает ₽100 за каждый готовый ролик этого клиента</div>
+    </div>
+    <div class="field" style="margin-bottom:14px;">
+      <label>Базовая цена за ролик, ₽</label>
+      <input id="fBasePrice" type="number" data-base-price-client="${id}" value="${hasValue(c.basePrice)?c.basePrice:''}" placeholder="Например, 1500">
+      <div class="field-note">Применяется ко всем роликам этого клиента, у которых нет своей отдельной цены${!hasValue(c.basePrice) ? ` · пока не указана, поэтому используется расчётная оценка ₽${Math.round(clientPricePerReel(id)).toLocaleString('ru-RU')}` : ''}</div>
+    </div>
+    ${referredClients(id).length ? `
+    <details class="reel-group" style="margin-bottom:14px;">
+      <summary>
+        <div><div class="pkg-title">Приведённые клиенты (${referredClients(id).length})</div><div class="pkg-meta">реферальный бонус</div></div>
+        <span class="pkg-count" style="color:var(--ok);">${fmtMoney(referralBonus(id))}</span>
+      </summary>
+      <div class="reel-group-body">${referralBonusTableHtml(id)}</div>
+    </details>` : ''}
+    <div class="btn-row" style="margin-bottom:16px;">
+      <button class="btn btn-primary" id="addPaymentForClient">+ Добавить оплату</button>
+      <button class="btn btn-primary" id="addReelForClient" style="background:var(--ok); color:#052e12;">+ Добавить ролики</button>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr; margin-bottom:10px;">
+      <div class="stat-card"><div class="label">Оплачено</div><div class="value" style="font-size:19px;">${fmtMoney(clientTotalPaid(id))}</div></div>
+      <div class="stat-card"><div class="label">Заморожено</div><div class="value" style="font-size:19px; color:var(--warn)">${fmtMoney(Math.round(clientFrozenBudget(id)))}</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr; margin-bottom:10px;">
+      <div class="stat-card"><div class="label">Куплено роликов</div><div class="value" style="font-size:19px;">${clientReelsPurchased(id)}</div></div>
+      <div class="stat-card"><div class="label">Готово</div><div class="value" style="font-size:19px;">${clientReelsDone(id)}</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr; margin-bottom:16px;">
+      <div class="stat-card" style="grid-column: span 2;">
+        <div class="label">Остаток</div>
+        <div class="value" style="font-size:19px; color:var(--${balanceClass(bal)})">${bal}${bal<0 ? `<span style="font-family:var(--font-body); font-size:13px; font-weight:700; color:var(--danger); margin-left:10px;">должен ${fmtMoney(Math.round(clientDebt(id)))}</span>` : ''}</div>
+      </div>
+    </div>
+    <div class="panel-head">
+      <h3>Ролики по пакетам оплаты</h3>
+      <button class="btn btn-ghost" id="openReportBtn" style="width:auto; flex:0 0 auto; padding:7px 14px; font-size:12.5px;">📋 Отчёт</button>
+    </div>
+    ${(()=>{
+      const {groups, orphan} = groupReelsByPayment(id);
+      const numberMap = numberReelsForClient(id);
+      let html = '';
+      if(orphan.length){
+        html += `
+        <details class="reel-group">
+          <summary>
+            <div><div class="pkg-title">До первой оплаты / без привязки</div><div class="pkg-meta">${orphan.length} ролик(ов)</div></div>
+            <span class="pkg-count">${orphan.length}</span>
+          </summary>
+          <div class="reel-group-body">${reelTableHtml(orphan, numberMap, true)}</div>
+        </details>`;
+      }
+      groups.forEach((g, i) => {
+        const p = g.payment;
+        html += `
+        <details class="reel-group" ${i===0?'open':''}>
+          <summary>
+            <div><div class="pkg-title">${formatDate(p.date)} — ${p.comment}</div><div class="pkg-meta">₽${p.amount.toLocaleString('ru-RU')} · пакет на ${p.reelsCount} роликов</div></div>
+            <span class="pkg-count">${g.reels.length}/${p.reelsCount}</span>
+          </summary>
+          <div class="reel-group-body">${reelTableHtml(g.reels, numberMap, true)}</div>
+        </details>`;
+      });
+      if(!orphan.length && groups.length===0) html = '<div style="color:var(--text-muted); font-size:13px; padding:6px 0 14px;">Пока нет ни оплат, ни роликов</div>';
+      return html;
+    })()}
+    <div class="panel-head" style="margin-top:16px;"><h3>Оплаты</h3></div>
+    ${cPayments.map(p=>`<div class="row" data-client-payment="${p.id}"><div><div class="title">${p.comment}</div><div class="subtitle">${p.reelsCount} роликов · ${formatDate(p.date)}</div></div><div class="right"><div class="amount" style="color:var(--ok)">+${fmtMoney(p.amount)}</div></div></div>`).join('') || '<div style="color:var(--text-muted); font-size:13px; padding:6px 0;">Пока нет оплат</div>'}
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn btn-danger" id="deleteClient">Удалить клиента</button>
+      <button class="btn btn-ghost" id="closeSheet3">Закрыть</button>
+    </div>
+  `);
+  document.querySelectorAll('[data-client-reel]').forEach(el=>{
+    el.addEventListener('click', ()=> openEditReel(parseInt(el.dataset.clientReel), id));
+  });
+  document.querySelectorAll('[data-client-payment]').forEach(el=>{
+    el.addEventListener('click', ()=> openEditPayment(parseInt(el.dataset.clientPayment), id));
+  });
+  document.getElementById('addPaymentForClient').addEventListener('click', ()=> openAddPayment(id));
+  document.getElementById('addReelForClient').addEventListener('click', ()=> openAddReel(id));
+  document.getElementById('addTaskForClient').addEventListener('click', ()=> openAddTask(id));
+  document.getElementById('openReportBtn').addEventListener('click', ()=> openClientReport(id));
+  document.querySelectorAll('[data-task]').forEach(el=>{
+    el.addEventListener('click', ()=> openEditTask(parseInt(el.dataset.task), id));
+  });
+  document.getElementById('deleteClient').onclick = async ()=>{
+    if(!confirm(`Удалить клиента «${c.name}» и всю его историю (оплаты, ролики)? Это нельзя отменить.`)) return;
+    const btn = document.getElementById('deleteClient'); btn.disabled = true; btn.textContent = 'Удаляю...';
+    const {error} = await db.from('clients').delete().eq('id', id);
+    if(error){ alert('Не удалось удалить: '+error.message); btn.disabled=false; btn.textContent='Удалить клиента'; return; }
+    clients = clients.filter(x=>x.id!==id);
+    payments = payments.filter(x=>x.clientId!==id);
+    reels = reels.filter(x=>x.clientId!==id);
+    closeSheet(); setTab('clients');
+  };
+}
+
+function openClientReport(id){
+  const c = clientById(id);
+  const {groups, orphan} = groupReelsByPayment(id, false); // от старых к новым
+  const numberMap = numberReelsForClient(id);
+  const totalReelsCount = reels.filter(r=>r.clientId===id).length;
+  const totalValue = clientEarnedTotal(id);
+
+  let sections = '';
+  if(orphan.length){
+    sections += `
+      <div class="report-section">
+        <div class="report-section-title">До первой оплаты</div>
+        ${reelTableHtml(orphan, numberMap, false)}
+      </div>`;
+  }
+  groups.forEach(g=>{
+    const p = g.payment;
+    sections += `
+      <div class="report-section">
+        <div class="report-section-title">${formatDate(p.date)} — ${p.comment} <span style="color:var(--text-muted); font-weight:600;">(₽${p.amount.toLocaleString('ru-RU')}, пакет на ${p.reelsCount})</span></div>
+        ${reelTableHtml(g.reels, numberMap, false)}
+      </div>`;
+  });
+  if(!orphan.length && groups.length===0) sections = '<div style="color:var(--text-muted); padding:24px 0; text-align:center;">Пока нет роликов</div>';
+
+  const refBonus = referralBonus(id);
+  const referralSection = refBonus > 0 ? `
+    <div class="report-section">
+      <div class="report-section-title" style="color:var(--ok);">Реферальный бонус — привёл ${referredClients(id).length} клиент(ов)</div>
+      ${referralBonusTableHtml(id)}
+    </div>` : '';
+
+  openSheet(`
+    <div class="sheet-head">
+      <h3>Отчёт — ${c.name}</h3>
+      <button class="close-x" id="closeSheet">✕</button>
+    </div>
+    <div class="field-note" style="margin-bottom:18px;">Сформировано ${new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})} · сделайте скриншот, чтобы отправить клиенту</div>
+    ${sections}
+    <div class="panel" style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; margin-bottom:${referralSection?'18px':'0'}; padding:14px 18px;">
+      <span style="font-weight:700; font-size:14px;">Всего роликов: ${totalReelsCount}</span>
+      <span style="font-weight:800; font-size:16px; color:var(--ok); font-family:var(--font-mono);">${fmtMoney(Math.round(totalValue))}</span>
+    </div>
+    ${referralSection}
+    <button class="btn btn-ghost" id="closeSheet2" style="margin-top:16px;">Закрыть</button>
+  `, 'sheet-report');
+}
+
+function openAddPayment(lockedClientId){
+  const lockedClient = lockedClientId ? clientById(lockedClientId) : null;
+  openSheet(`
+    <div class="sheet-head"><h3>Новая оплата</h3><button class="close-x" id="closeSheet">✕</button></div>
+    ${lockedClient
+      ? `<div class="field"><label>Клиент</label><div style="padding:11px 12px; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; font-size:14px;">${lockedClient.name}</div></div>`
+      : `<div class="field"><label>Клиент</label><select id="fClient">${clientOptions()}</select></div>`}
+    <div class="field-row">
+      <div class="field"><label>Сумма, ₽</label><input id="fAmount" type="number" placeholder="45000"></div>
+      <div class="field"><label>Кол-во роликов</label><input id="fReelsCount" type="number" placeholder="30"></div>
+    </div>
+    <div class="field-note" style="margin-top:-8px; margin-bottom:14px;">Эти ролики добавятся в остаток клиента</div>
+    <div class="field"><label>Дата</label><input id="fDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="field"><label>Комментарий</label><input id="fComment" placeholder="Например, пакет на месяц"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="closeSheet2">Отмена</button>
+      <button class="btn btn-primary" id="savePayment">Сохранить</button>
+    </div>
+  `);
+  document.getElementById('savePayment').onclick = async ()=>{
+    const amount = parseInt(document.getElementById('fAmount').value);
+    const reelsCount = parseInt(document.getElementById('fReelsCount').value);
+    if(!amount || !reelsCount) return;
+    const row = {
+      client_id: lockedClientId || parseInt(document.getElementById('fClient').value),
+      amount, reels_count: reelsCount,
+      date: document.getElementById('fDate').value,
+      comment: document.getElementById('fComment').value.trim() || 'Без комментария',
+    };
+    const btn = document.getElementById('savePayment'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    const {data, error} = await db.from('payments').insert(row).select().single();
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Сохранить'; return; }
+    payments.push(rowToPayment(data));
+    if(lockedClientId){ openClientDetail(lockedClientId); } else { closeSheet(); setTab('payments'); }
+  };
+}
+
+function openEditPayment(id, returnToClientId){
+  const p = payments.find(x=>x.id===id);
+  openSheet(`
+    <div class="sheet-head"><h3>Оплата</h3><button class="close-x" id="closeSheet">✕</button></div>
+    <div class="field"><label>Клиент</label><select id="fClient">${clientOptions(p.clientId)}</select></div>
+    <div class="field-row">
+      <div class="field"><label>Сумма, ₽</label><input id="fAmount" type="number" value="${p.amount}"></div>
+      <div class="field"><label>Кол-во роликов</label><input id="fReelsCount" type="number" value="${p.reelsCount}"></div>
+    </div>
+    <div class="field"><label>Дата</label><input id="fDate" type="date" value="${p.date}"></div>
+    <div class="field"><label>Комментарий</label><input id="fComment" value="${p.comment}"></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="deletePayment">Удалить</button>
+      <button class="btn btn-primary" id="savePayment">Сохранить</button>
+    </div>
+  `);
+  document.getElementById('savePayment').onclick = async ()=>{
+    const updates = {
+      client_id: parseInt(document.getElementById('fClient').value),
+      amount: parseInt(document.getElementById('fAmount').value),
+      reels_count: parseInt(document.getElementById('fReelsCount').value),
+      date: document.getElementById('fDate').value,
+      comment: document.getElementById('fComment').value.trim(),
+    };
+    const btn = document.getElementById('savePayment'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    const {error} = await db.from('payments').update(updates).eq('id', id);
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Сохранить'; return; }
+    Object.assign(p, {clientId:updates.client_id, amount:updates.amount, reelsCount:updates.reels_count, date:updates.date, comment:updates.comment});
+    if(returnToClientId){ openClientDetail(returnToClientId); } else { closeSheet(); setTab('payments'); }
+  };
+  document.getElementById('deletePayment').onclick = async ()=>{
+    if(!confirm(`Удалить эту оплату (${fmtMoney(p.amount)}, ${p.comment})? Это нельзя отменить.`)) return;
+    const btn = document.getElementById('deletePayment'); btn.disabled = true; btn.textContent = 'Удаляю...';
+    const {error} = await db.from('payments').delete().eq('id', id);
+    if(error){ alert('Не удалось удалить: '+error.message); btn.disabled=false; btn.textContent='Удалить'; return; }
+    payments = payments.filter(x=>x.id!==id);
+    if(returnToClientId){ openClientDetail(returnToClientId); } else { closeSheet(); setTab('payments'); }
+  };
+}
+
+function openAddReel(lockedClientId){
+  let rows = [{title:'', price:''}];
+  const today = new Date().toISOString().slice(0,10);
+  const todayLabel = new Date().toLocaleDateString('ru-RU', {day:'numeric', month:'long'});
+  const lockedClient = lockedClientId ? clientById(lockedClientId) : null;
+
+  function rowsHtml(){
+    return rows.map((r,i)=>`
+      <div class="bulk-row">
+        <input class="bulk-title" data-idx="${i}" placeholder="Название ролика" value="${r.title.replace(/"/g,'&quot;')}">
+        <input class="bulk-price" data-idx="${i}" type="number" placeholder="₽ за ролик" value="${r.price}">
+        ${rows.length>1 ? `<button class="bulk-remove" data-idx="${i}" type="button">✕</button>` : ''}
+      </div>`).join('');
+  }
+
+  function attachRowEvents(){
+    document.querySelectorAll('.bulk-title').forEach(el=>{
+      el.oninput = ()=>{ rows[+el.dataset.idx].title = el.value; };
+    });
+    document.querySelectorAll('.bulk-price').forEach(el=>{
+      el.oninput = ()=>{ rows[+el.dataset.idx].price = el.value; updatePreview(); };
+    });
+    document.querySelectorAll('.bulk-remove').forEach(el=>{
+      el.onclick = ()=>{ rows.splice(+el.dataset.idx,1); renderRows(); updatePreview(); };
+    });
+  }
+
+  function renderRows(){
+    document.getElementById('bulkRows').innerHTML = rowsHtml();
+    attachRowEvents();
+  }
+
+  function currentClientId(){
+    return lockedClientId || parseInt(select.value);
+  }
+
+  function updatePreview(){
+    const clientId = currentClientId();
+    const bal = clientBalance(clientId);
+    const filled = rows.filter(r=>r.title.trim()!=='').length || rows.length;
+    const newBal = bal - filled;
+    preview.textContent = `Будет добавлено роликов: ${filled}. После этого остаток станет: ${newBal}`;
+    preview.style.color = balanceClass(newBal)==='danger' ? 'var(--danger)' : balanceClass(newBal)==='warn' ? 'var(--warn)' : 'var(--text-muted)';
+  }
+
+  openSheet(`
+    <div class="sheet-head"><h3>Готовые ролики</h3><button class="close-x" id="closeSheet">✕</button></div>
+    ${lockedClient
+      ? `<div class="field"><label>Клиент</label><div style="padding:11px 12px; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; font-size:14px;">${lockedClient.name}</div></div>`
+      : `<div class="field"><label>Клиент</label><select id="fClient">${clientOptions()}</select></div>`}
+    <div class="field-note" style="margin-bottom:14px;">Дата у всех — сегодня, ${todayLabel}</div>
+    <div class="field"><label>Ролики (можно сразу несколько)</label></div>
+    <div id="bulkRows">${rowsHtml()}</div>
+    <button class="btn btn-ghost" id="addRowBtn" type="button" style="width:100%; margin-bottom:14px;">+ Добавить ещё строку</button>
+    <div class="field-note" id="balancePreview" style="margin-bottom:14px;"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="closeSheet2">Отмена</button>
+      <button class="btn btn-primary" id="saveReel">Отметить готовыми</button>
+    </div>
+  `);
+
+  const select = document.getElementById('fClient');
+  const preview = document.getElementById('balancePreview');
+  attachRowEvents();
+  if(select) select.addEventListener('change', updatePreview);
+  document.getElementById('addRowBtn').addEventListener('click', ()=>{
+    rows.push({title:'', price:''});
+    renderRows();
+    updatePreview();
+  });
+  updatePreview();
+
+  document.getElementById('saveReel').onclick = async ()=>{
+    const clientId = currentClientId();
+    const valid = rows.filter(r=>r.title.trim()!=='');
+    if(valid.length===0){ alert('Впишите хотя бы одно название ролика'); return; }
+    const insertRows = valid.map(r=>({
+      client_id: clientId,
+      note: r.title.trim(),
+      date: today,
+      price: r.price!=='' ? parseFloat(r.price) : null,
+    }));
+    const btn = document.getElementById('saveReel'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    let data, error;
+    try{
+      ({data, error} = await db.from('reels').insert(insertRows).select());
+    }catch(e){
+      alert('Не удалось сохранить: нет связи с сервером. Проверьте интернет и попробуйте ещё раз.');
+      btn.disabled=false; btn.textContent='Отметить готовыми'; return;
+    }
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Отметить готовыми'; return; }
+    if(!data || data.length < insertRows.length){
+      alert('Внимание: похоже, сохранились не все ролики. Проверьте список и добавьте недостающие.');
+    }
+    /* ДИАГНОСТИКА: сразу после вставки отдельным запросом (не из кэша) проверяем,
+       что база реально отдаёт эти же строки обратно. Если insert вернул данные,
+       а повторный select их не находит — проблема в правах на чтение (RLS SELECT),
+       а не в самой записи. Если бы была проблема в записи — insert вернул бы error
+       или пустой data, и мы бы это уже поймали выше. */
+    const insertedIds = (data||[]).map(d=>d.id).filter(Boolean);
+    if(insertedIds.length){
+      const {data:checkData, error:checkError} = await db.from('reels').select('id').in('id', insertedIds);
+      if(checkError){
+        alert('ДИАГНОСТИКА: ролик(и) вставились, но повторный запрос на чтение вернул ошибку: '+checkError.message+'\n\nЭто повод проверить RLS-политику SELECT для таблицы reels в Supabase.');
+      } else if(!checkData || checkData.length < insertedIds.length){
+        alert('ДИАГНОСТИКА: ролик(и) записались в базу (insert прошёл успешно, id: '+insertedIds.join(', ')+'), но при немедленном повторном чтении найдено только '+(checkData?checkData.length:0)+' из '+insertedIds.length+'.\n\nЭто значит: проблема не в сохранении, а в праве на ЧТЕНИЕ (RLS SELECT policy) таблицы reels в Supabase — именно поэтому при обновлении страницы ролики "пропадают". Нужно открыть Supabase → Authentication → Policies → reels и сравнить политику SELECT с политикой INSERT.');
+      }
+    }
+    (data||[]).forEach(d=>reels.push(rowToReel(d)));
+    if(lockedClientId){ openClientDetail(lockedClientId); } else { closeSheet(); setTab('reels'); }
+  };
+}
+
+function openEditReel(id, returnToClientId){
+  const r = reels.find(x=>x.id===id);
+  openSheet(`
+    <div class="sheet-head"><h3>Готовый ролик</h3><button class="close-x" id="closeSheet">✕</button></div>
+    <div class="field"><label>Клиент</label><select id="fClient">${clientOptions(r.clientId)}</select></div>
+    <div class="field"><label>Что за ролик</label><input id="fNote" value="${r.note||''}"></div>
+    <div class="field-row">
+      <div class="field"><label>Дата</label><input id="fDate" type="date" value="${r.date}"></div>
+      <div class="field"><label>₽ за ролик (необязательно)</label><input id="fPrice" type="number" value="${r.price!=null?r.price:''}"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="deleteReel">Удалить</button>
+      <button class="btn btn-primary" id="saveReel">Сохранить</button>
+    </div>
+  `);
+  document.getElementById('saveReel').onclick = async ()=>{
+    const updates = {
+      client_id: parseInt(document.getElementById('fClient').value),
+      note: document.getElementById('fNote').value.trim(),
+      date: document.getElementById('fDate').value,
+      price: document.getElementById('fPrice').value !== '' ? parseFloat(document.getElementById('fPrice').value) : null,
+    };
+    const btn = document.getElementById('saveReel'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    const {error} = await db.from('reels').update(updates).eq('id', id);
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Сохранить'; return; }
+    Object.assign(r, {clientId:updates.client_id, note:updates.note, date:updates.date, price:updates.price});
+    if(returnToClientId){ openClientDetail(returnToClientId); } else { closeSheet(); setTab('reels'); }
+  };
+  document.getElementById('deleteReel').onclick = async ()=>{
+    if(!confirm(`Удалить ролик «${r.note||'Без названия'}»? Это нельзя отменить.`)) return;
+    const btn = document.getElementById('deleteReel'); btn.disabled = true; btn.textContent = 'Удаляю...';
+    const {error} = await db.from('reels').delete().eq('id', id);
+    if(error){ alert('Не удалось удалить: '+error.message); btn.disabled=false; btn.textContent='Удалить'; return; }
+    reels = reels.filter(x=>x.id!==id);
+    if(returnToClientId){ openClientDetail(returnToClientId); } else { closeSheet(); setTab('reels'); }
+  };
+}
+
+function attachSheetEvents(){
+  const c1 = document.getElementById('closeSheet');
+  const c2 = document.getElementById('closeSheet2');
+  const c3 = document.getElementById('closeSheet3');
+  if(c1) c1.onclick = closeSheet;
+  if(c2) c2.onclick = closeSheet;
+  if(c3) c3.onclick = closeSheet;
+  const qc = document.getElementById('qcClient');
+  const qp = document.getElementById('qcPayment');
+  const qr = document.getElementById('qcReel');
+  const qt = document.getElementById('qcTask');
+  if(qc) qc.onclick = openAddClient;
+  if(qp) qp.onclick = openAddPayment;
+  if(qr) qr.onclick = openAddReel;
+  if(qt) qt.onclick = ()=> openAddTask();
+  document.querySelectorAll('[data-manager-client]').forEach(el=>{
+    el.addEventListener('change', async e=>{
+      const clientId = parseInt(el.dataset.managerClient);
+      const managerId = el.value ? parseInt(el.value) : null;
+      const {error} = await db.from('clients').update({manager_id: managerId}).eq('id', clientId);
+      if(error){ alert('Не удалось сохранить: '+error.message); return; }
+      clientById(clientId).managerId = managerId;
+    });
+  });
+  document.querySelectorAll('[data-confirm-client]').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      const clientId = parseInt(el.dataset.confirmClient);
+      toggleConfirm(clientId).then(()=> openClientDetail(clientId));
+    });
+  });
+  document.querySelectorAll('[data-base-price-client]').forEach(el=>{
+    el.addEventListener('change', async e=>{
+      const clientId = parseInt(el.dataset.basePriceClient);
+      const val = el.value.trim();
+      const newPrice = val === '' ? null : parseFloat(val);
+      const {error} = await db.from('clients').update({base_price:newPrice}).eq('id', clientId);
+      if(error){ alert('Не удалось сохранить: '+error.message); return; }
+      clientById(clientId).basePrice = newPrice;
+      openClientDetail(clientId);
+    });
+  });
+  document.querySelectorAll('[data-referrer-client]').forEach(el=>{
+    el.addEventListener('change', async e=>{
+      const clientId = parseInt(el.dataset.referrerClient);
+      const referrerId = el.value ? parseInt(el.value) : null;
+      const {error} = await db.from('clients').update({referrer_id:referrerId}).eq('id', clientId);
+      if(error){ alert('Не удалось сохранить: '+error.message); return; }
+      clientById(clientId).referrerId = referrerId;
+      openClientDetail(clientId);
+    });
+  });
+}
+
+function openAddTask(lockedClientId){
+  let checklist = [];
+  const draft = {title:'', deadline:'', managerId:'', clientId: lockedClientId||''};
+
+  function checklistRowsHtml(){
+    if(checklist.length===0) return '<div style="color:var(--text-muted); font-size:12px; padding:4px 0 8px;">Чек-лист пуст (необязательно)</div>';
+    return checklist.map((it,i)=>`
+      <div class="bulk-row">
+        <input class="bulk-title" data-cl-idx="${i}" placeholder="Пункт чек-листа" value="${(it.text||'').replace(/"/g,'&quot;')}">
+        <button class="bulk-remove" data-cl-remove="${i}" type="button">✕</button>
+      </div>`).join('');
+  }
+  function attachChecklistEvents(){
+    document.querySelectorAll('[data-cl-idx]').forEach(el=>{
+      el.oninput = ()=>{ checklist[+el.dataset.clIdx].text = el.value; };
+    });
+    document.querySelectorAll('[data-cl-remove]').forEach(el=>{
+      el.onclick = ()=>{ checklist.splice(+el.dataset.clRemove,1); renderChecklist(); };
+    });
+  }
+  function renderChecklist(){
+    document.getElementById('taskChecklistRows').innerHTML = checklistRowsHtml();
+    attachChecklistEvents();
+  }
+
+  const lockedClient = lockedClientId ? clientById(lockedClientId) : null;
+  openSheet(`
+    <div class="sheet-head"><h3>Новая задача</h3><button class="close-x" id="closeSheet">✕</button></div>
+    <div class="field"><label>Что нужно сделать</label><input id="fTaskTitle" placeholder="Например, снять материал у клиента"></div>
+    <div class="field"><label>Клиент (необязательно)</label>${taskClientSelectHtml({clientId: lockedClientId||null}, lockedClientId)}</div>
+    <div class="field"><label>Менеджер (необязательно)</label>${taskManagerSelectHtml({managerId:null})}</div>
+    <div class="field"><label>Дедлайн (необязательно)</label><input id="fTaskDeadline" type="date"></div>
+    <div class="field"><label>Чек-лист (необязательно, не влияет на статус задачи)</label></div>
+    <div id="taskChecklistRows">${checklistRowsHtml()}</div>
+    <button class="btn btn-ghost" id="addChecklistRowBtn" type="button" style="width:100%; margin-bottom:14px;">+ Добавить пункт чек-листа</button>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="closeSheet2">Отмена</button>
+      <button class="btn btn-primary" id="saveTask">Сохранить</button>
+    </div>
+  `);
+  attachChecklistEvents();
+  document.getElementById('addChecklistRowBtn').addEventListener('click', ()=>{
+    checklist.push({text:'', done:false});
+    renderChecklist();
+  });
+  document.getElementById('saveTask').onclick = async ()=>{
+    const title = document.getElementById('fTaskTitle').value.trim();
+    if(!title){ alert('Впишите, что нужно сделать'); return; }
+    const clientSel = document.getElementById('fTaskClient');
+    const managerSel = document.getElementById('fTaskManager');
+    const deadlineVal = document.getElementById('fTaskDeadline').value;
+    const row = {
+      title,
+      client_id: lockedClientId || (clientSel && clientSel.value ? parseInt(clientSel.value) : null),
+      manager_id: managerSel && managerSel.value ? parseInt(managerSel.value) : null,
+      deadline: deadlineVal || null,
+      checklist: checklist.filter(it=>it.text.trim()!=='').map(it=>({text:it.text.trim(), done:!!it.done})),
+      done: false,
+      created_date: todayStr(),
+    };
+    const btn = document.getElementById('saveTask'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    const {data, error} = await db.from('tasks').insert(row).select().single();
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Сохранить'; return; }
+    tasks.push(rowToTask(data));
+    if(lockedClientId){ openClientDetail(lockedClientId); } else { closeSheet(); setTab('tasks'); }
+  };
+}
+
+function openEditTask(id, returnToClientId){
+  const t = tasks.find(x=>x.id===id);
+  let checklist = (t.checklist||[]).map(it=>({text:it.text, done:!!it.done}));
+
+  function checklistRowsHtml(){
+    if(checklist.length===0) return '<div style="color:var(--text-muted); font-size:12px; padding:4px 0 8px;">Чек-лист пуст</div>';
+    return checklist.map((it,i)=>`
+      <div class="bulk-row" style="align-items:center;">
+        <input type="checkbox" data-cl-check="${i}" ${it.done?'checked':''} style="width:18px; height:18px; flex-shrink:0;">
+        <input class="bulk-title" data-cl-idx="${i}" value="${(it.text||'').replace(/"/g,'&quot;')}">
+        <button class="bulk-remove" data-cl-remove="${i}" type="button">✕</button>
+      </div>`).join('');
+  }
+  function attachChecklistEvents(){
+    document.querySelectorAll('[data-cl-idx]').forEach(el=>{
+      el.oninput = ()=>{ checklist[+el.dataset.clIdx].text = el.value; };
+    });
+    document.querySelectorAll('[data-cl-check]').forEach(el=>{
+      el.onchange = ()=>{ checklist[+el.dataset.clCheck].done = el.checked; };
+    });
+    document.querySelectorAll('[data-cl-remove]').forEach(el=>{
+      el.onclick = ()=>{ checklist.splice(+el.dataset.clRemove,1); renderChecklist(); };
+    });
+  }
+  function renderChecklist(){
+    document.getElementById('taskChecklistRows').innerHTML = checklistRowsHtml();
+    attachChecklistEvents();
+  }
+
+  openSheet(`
+    <div class="sheet-head"><h3>Задача</h3><button class="close-x" id="closeSheet">✕</button></div>
+    <div class="field"><label>Что нужно сделать</label><input id="fTaskTitle" value="${(t.title||'').replace(/"/g,'&quot;')}"></div>
+    <div class="field"><label>Клиент (необязательно)</label>${taskClientSelectHtml(t)}</div>
+    <div class="field"><label>Менеджер (необязательно)</label>${taskManagerSelectHtml(t)}</div>
+    <div class="field"><label>Дедлайн (необязательно)</label><input id="fTaskDeadline" type="date" value="${t.deadline||''}"></div>
+    <div class="field"><label>Чек-лист (необязательно, не влияет на статус задачи)</label></div>
+    <div id="taskChecklistRows">${checklistRowsHtml()}</div>
+    <button class="btn btn-ghost" id="addChecklistRowBtn" type="button" style="width:100%; margin-bottom:14px;">+ Добавить пункт чек-листа</button>
+    <div class="field" style="display:flex; align-items:center; gap:10px;">
+      <label style="margin:0;">Выполнена</label>
+      <input type="checkbox" id="fTaskDone" ${t.done?'checked':''} style="width:18px; height:18px;">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-danger" id="deleteTask">Удалить</button>
+      <button class="btn btn-primary" id="saveTask">Сохранить</button>
+    </div>
+  `);
+  attachChecklistEvents();
+  document.getElementById('addChecklistRowBtn').addEventListener('click', ()=>{
+    checklist.push({text:'', done:false});
+    renderChecklist();
+  });
+  document.getElementById('saveTask').onclick = async ()=>{
+    const title = document.getElementById('fTaskTitle').value.trim();
+    if(!title){ alert('Впишите, что нужно сделать'); return; }
+    const clientSel = document.getElementById('fTaskClient');
+    const managerSel = document.getElementById('fTaskManager');
+    const deadlineVal = document.getElementById('fTaskDeadline').value;
+    const nowDone = document.getElementById('fTaskDone').checked;
+    const updates = {
+      title,
+      client_id: clientSel && clientSel.value ? parseInt(clientSel.value) : null,
+      manager_id: managerSel && managerSel.value ? parseInt(managerSel.value) : null,
+      deadline: deadlineVal || null,
+      checklist: checklist.filter(it=>it.text.trim()!=='').map(it=>({text:it.text.trim(), done:!!it.done})),
+      done: nowDone,
+      done_date: nowDone ? (t.done ? t.doneDate : todayStr()) : null,
+    };
+    const btn = document.getElementById('saveTask'); btn.disabled = true; btn.textContent = 'Сохраняю...';
+    const {error} = await db.from('tasks').update(updates).eq('id', id);
+    if(error){ alert('Не удалось сохранить: '+error.message); btn.disabled=false; btn.textContent='Сохранить'; return; }
+    Object.assign(t, {title:updates.title, clientId:updates.client_id, managerId:updates.manager_id, deadline:updates.deadline, checklist:updates.checklist, done:updates.done, doneDate:updates.done_date});
+    if(returnToClientId){ openClientDetail(returnToClientId); } else { closeSheet(); setTab('tasks'); }
+  };
+  document.getElementById('deleteTask').onclick = async ()=>{
+    if(!confirm(`Удалить задачу «${t.title}»? Это нельзя отменить.`)) return;
+    const btn = document.getElementById('deleteTask'); btn.disabled = true; btn.textContent = 'Удаляю...';
+    const {error} = await db.from('tasks').delete().eq('id', id);
+    if(error){ alert('Не удалось удалить: '+error.message); btn.disabled=false; btn.textContent='Удалить'; return; }
+    tasks = tasks.filter(x=>x.id!==id);
+    if(returnToClientId){ openClientDetail(returnToClientId); } else { closeSheet(); setTab('tasks'); }
+  };
+}
+
+async function toggleTaskDone(id, returnToClientId){
+  const t = tasks.find(x=>x.id===id);
+  const nowDone = !t.done;
+  const doneDate = nowDone ? todayStr() : null;
+  const {error} = await db.from('tasks').update({done: nowDone, done_date: doneDate}).eq('id', id);
+  if(error){ alert('Не удалось сохранить: '+error.message); return; }
+  t.done = nowDone; t.doneDate = doneDate;
+  if(returnToClientId){ openClientDetail(returnToClientId); } else { render(); }
+}
+
+/* ---------------- INIT ---------------- */
+document.querySelectorAll('.nav-item, .bn-item').forEach(el=>{
+  el.addEventListener('click', ()=> setTab(el.dataset.tab));
+});
+document.getElementById('quickAddBtn').addEventListener('click', openQuickAdd);
+
+/* ---------------- ЭКРАН ВХОДА ----------------
+   Простая защита от случайных людей, перешедших по ссылке.
+   Логин/пароль хранятся в этом файле открытым текстом — это не защита
+   от того, кто умеет смотреть код страницы, а просто "закрытая дверь"
+   для всех остальных. Реальная защита данных — это RLS в Supabase
+   и то, что ссылку на бота вы никому не публикуете.
+------------------------------------------------------------------ */
+/* ---------------- ЭКРАН ВХОДА ----------------
+   Настоящий вход через Supabase Auth: проверка происходит на стороне
+   базы данных, а не в браузере. Пока человек не вошёл под одним из
+   аккаунтов, созданных в Supabase (Authentication → Users), база
+   отклоняет любые запросы — это уже не просто "закрытая дверь",
+   а реальная защита на уровне сервера (RLS требует auth.role() = 'authenticated').
+------------------------------------------------------------------ */
+async function tryLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  err.textContent = '';
+  btn.disabled = true; btn.textContent = 'Проверяю...';
+  const {data, error} = await db.auth.signInWithPassword({email, password: pass});
+  btn.disabled = false; btn.textContent = 'Войти';
+  if(error){
+    err.textContent = 'Неверный email или пароль';
+    return;
+  }
+  document.getElementById('loginScreen').style.display = 'none';
+  loadAll();
+}
+document.getElementById('loginBtn').addEventListener('click', tryLogin);
+document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
+document.getElementById('loginEmail').addEventListener('keydown', e=>{ if(e.key==='Enter') tryLogin(); });
+
+document.getElementById('logoutLink').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  await db.auth.signOut();
+  location.reload();
+});
+
+/* Если сессия уже сохранена в браузере (человек не выходил) — пускаем сразу */
+(async ()=>{
+  const {data:{session}} = await db.auth.getSession();
+  if(session){
+    document.getElementById('loginScreen').style.display = 'none';
+    loadAll();
+  }
+})();
+</script>
+</body>
+</html>
